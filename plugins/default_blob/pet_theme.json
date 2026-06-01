@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "name": "Default Pixel Blob",
+  "author": "Pixel Token Pet",
+  "description": "The built-in purple pixel blob theme.",
+  "pixel_size": 6,
+  "origin": {
+    "x": 18,
+    "y": 16
+  },
+  "palette": {
+    "outline": "#5a3d7a",
+    "body": "#c9a8ff",
+    "eye": "#231b2e",
+    "cheek": "#ff8bd4"
+  },
+  "animations": {
+    "idle": {
+      "blink_every": 26,
+      "blink_frames": [0, 1],
+      "bob_every": 18,
+      "bob_frames": 9,
+      "frames": [
+        [
+          "0011111100",
+          "0112222210",
+          "1122222221",
+          "1222323221",
+          "1222222221",
+          "1222442221",
+          "0122222210",
+          "0012112100",
+          "0001001000"
+        ]
+      ]
+    }
+  },
+  "speech": {
+    "title": "PIXEL TOKEN PET",
+    "hint": "right click menu / dblclick done",
+    "done_title": "DONE!",
+    "done_body": "Codex finished the task."
+  }
+}

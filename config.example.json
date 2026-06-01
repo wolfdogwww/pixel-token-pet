@@ -1,0 +1,15 @@
+{
+  "codex_logs_db": "%USERPROFILE%\\.codex\\logs_2.sqlite",
+  "codex_goals_db": "%USERPROFILE%\\.codex\\goals_1.sqlite",
+  "claude_dir": "%USERPROFILE%\\.claude",
+  "claude_exe": "%USERPROFILE%\\.local\\bin\\claude.exe",
+  "refresh_seconds": 5,
+  "always_on_top": true,
+  "trigger_finish_popup_on_new_codex_completion": false,
+  "trigger_finish_popup_on_goal_complete": true,
+  "finish_signal_file": "finish.signal",
+  "theme": "default_blob",
+  "memory_log_enabled": true,
+  "memory_sample_seconds": 300,
+  "memory_log_dir": "logs"
+}
