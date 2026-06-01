@@ -38,6 +38,7 @@ def load_config():
         "codex_goals_db": str(DEFAULT_CODEX_GOALS_DB),
         "claude_dir": str(DEFAULT_CLAUDE_DIR),
         "claude_exe": str(DEFAULT_CLAUDE_EXE),
+        "claude_extra_dirs": [],
         "refresh_seconds": 5,
         "always_on_top": True,
         "trigger_finish_popup_on_new_codex_completion": False,
@@ -399,18 +400,10 @@ class UsageReader:
         ccusage = self._run(["ccusage", "daily", "--json"])
         if ccusage:
             try:
-                data = json.loads(ccusage)
-                today_key = datetime.now().strftime("%Y-%m-%d")
-                rows = data.get("daily", data if isinstance(data, list) else [])
-                today_rows = [r for r in rows if str(r.get("date", "")).startswith(today_key)]
-                total_cost = sum(float(r.get("totalCost", r.get("cost", 0)) or 0) for r in today_rows)
-                total_tokens = sum(int(r.get("totalTokens", r.get("tokens", 0)) or 0) for r in today_rows)
-                result["ok"] = True
-                result["source"] = "ccusage"
-                result["today"]["total"] = total_tokens
-                result["today"]["cost"] = total_cost
-                result["note"] = ""
-                return result
+                parsed = self._parse_ccusage_daily(json.loads(ccusage))
+                if parsed["ok"]:
+                    result.update(parsed)
+                    return result
             except Exception:
                 result["note"] = "ccusage exists, but JSON shape was not recognized"
 
@@ -423,40 +416,125 @@ class UsageReader:
                 self._claude_version_cache = version.strip() if version else "installed"
             result["version"] = self._claude_version_cache
 
-        result["source"] = str(claude_dir)
-        if claude_dir.exists():
-            jsonl_usage = self._read_claude_jsonl_usage(claude_dir)
-            if jsonl_usage["seen_files"]:
+        candidates = self._candidate_claude_dirs(claude_dir)
+        result["source"] = "; ".join(str(path) for path in candidates)
+        seen_files = 0
+        for candidate in candidates:
+            if not candidate.exists():
+                continue
+            jsonl_usage = self._read_claude_jsonl_usage(candidate)
+            seen_files += jsonl_usage["seen_files"]
+            if jsonl_usage["ok"]:
                 jsonl_usage["installed"] = result["installed"]
                 jsonl_usage["version"] = result["version"]
                 result.update(jsonl_usage)
                 return result
-            files = list(claude_dir.rglob("*"))
-            if result["installed"]:
-                result["ok"] = True
-                result["source"] = str(claude_exe)
-                result["note"] = f"Claude Code {result['version']}, no usage logs yet"
-            else:
-                result["note"] = f"Claude folder found, no usage logs ({len(files)} files)"
+        if result["installed"]:
+            result["ok"] = True
+            result["source"] = str(claude_exe)
+            result["note"] = f"Claude Code {result['version']}, no token logs found in {len(candidates)} locations"
+        elif any(path.exists() for path in candidates):
+            result["note"] = f"Claude folders found, no token usage in {seen_files} JSONL files"
         return result
 
-    def _read_claude_jsonl_usage(self, claude_dir):
+    def _parse_ccusage_daily(self, data):
         result = {
             "ok": False,
-            "source": str(claude_dir / "projects"),
+            "source": "ccusage",
+            "today": {"input": 0, "output": 0, "cached": 0, "total": 0, "calls": 0, "cost": 0.0},
+            "month": {"input": 0, "output": 0, "cached": 0, "total": 0, "calls": 0, "cost": 0.0},
+            "note": "",
+        }
+        today_key = datetime.now().strftime("%Y-%m-%d")
+        month_key = datetime.now().strftime("%Y-%m")
+        rows = data.get("daily", data if isinstance(data, list) else [])
+        if not isinstance(rows, list):
+            return result
+
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            date = str(row.get("date", ""))
+            cache_create = int(row.get("cacheCreationTokens", row.get("cache_creation_input_tokens", 0)) or 0)
+            cache_read = int(row.get("cacheReadTokens", row.get("cache_read_input_tokens", 0)) or 0)
+            item = {
+                "input": int(row.get("inputTokens", row.get("input_tokens", 0)) or 0),
+                "output": int(row.get("outputTokens", row.get("output_tokens", 0)) or 0),
+                "cached": cache_create + cache_read,
+                "total": int(row.get("totalTokens", row.get("tokens", 0)) or 0),
+                "cost": float(row.get("totalCost", row.get("cost", 0)) or 0),
+            }
+            if item["total"] <= 0:
+                item["total"] = item["input"] + item["output"] + item["cached"]
+            if item["total"] <= 0:
+                continue
+            item["calls"] = int(row.get("requests", row.get("calls", 1)) or 1)
+            if date.startswith(month_key):
+                self._add_usage(result["month"], item)
+            if date.startswith(today_key):
+                self._add_usage(result["today"], item)
+
+        result["ok"] = result["today"]["total"] > 0 or result["month"]["total"] > 0
+        return result
+
+    def _candidate_claude_dirs(self, configured_dir):
+        candidates = [configured_dir]
+        for raw in self.config.get("claude_extra_dirs", []) or []:
+            candidates.append(expand_path(raw))
+
+        env_paths = self._claude_env_dirs()
+        candidates.extend(env_paths)
+
+        unique = []
+        seen = set()
+        for path in candidates:
+            try:
+                key = str(path.resolve() if path.exists() else path)
+            except Exception:
+                key = str(path)
+            if key not in seen:
+                seen.add(key)
+                unique.append(path)
+        return unique
+
+    @staticmethod
+    def _claude_env_dirs():
+        import os
+
+        paths = [Path.home() / ".claude"]
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            paths.append(Path(appdata) / "Claude")
+        local_appdata = os.environ.get("LOCALAPPDATA")
+        if local_appdata:
+            local = Path(local_appdata)
+            paths.extend([local / "Claude", local / "Claude-3p"])
+            packages = local / "Packages"
+            if packages.exists():
+                try:
+                    for package in packages.glob("Claude_*"):
+                        paths.append(package / "LocalCache" / "Roaming" / "Claude")
+                except Exception:
+                    pass
+        return paths
+
+    def _read_claude_jsonl_usage(self, claude_dir):
+        search_root = claude_dir / "projects" if (claude_dir / "projects").exists() else claude_dir
+        result = {
+            "ok": False,
+            "source": str(search_root),
             "today": {"input": 0, "output": 0, "cached": 0, "total": 0, "calls": 0, "cost": 0.0},
             "month": {"input": 0, "output": 0, "cached": 0, "total": 0, "calls": 0, "cost": 0.0},
             "note": "",
             "seen_files": 0,
         }
-        projects = claude_dir / "projects"
-        if not projects.exists():
+        if not search_root.exists():
             return result
 
         today_start, _ = today_bounds()
         month_start, _ = month_bounds()
         seen_ids = set()
-        files = list(projects.rglob("*.jsonl"))
+        files = list(search_root.rglob("*.jsonl"))
         result["seen_files"] = len(files)
 
         for path in files:
@@ -494,7 +572,7 @@ class UsageReader:
         bucket["output"] += item["output"]
         bucket["cached"] += item["cached"]
         bucket["total"] += item["total"]
-        bucket["calls"] += 1
+        bucket["calls"] += int(item.get("calls", 1) or 1)
         bucket["cost"] += item["cost"]
 
     @staticmethod

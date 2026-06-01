@@ -8,6 +8,7 @@ A small pixel-style desktop pet for Windows that shows local Codex and Claude us
 - Codex token usage from `%USERPROFILE%\.codex\logs_2.sqlite`.
 - Codex goal-complete detection from `%USERPROFILE%\.codex\goals_1.sqlite`.
 - Claude Code usage from `ccusage daily --json` or `%USERPROFILE%\.claude\projects\**\*.jsonl`.
+- Claude Code fallback search in `%APPDATA%\Claude` and Windows packaged Claude folders.
 - Cute completion popup when a Codex goal becomes `complete`.
 - Manual completion popup by double-clicking the pet.
 - External completion popup by touching `finish.signal`.
@@ -172,6 +173,7 @@ Use `config.example.json` as the portable template:
   "codex_goals_db": "%USERPROFILE%\\.codex\\goals_1.sqlite",
   "claude_dir": "%USERPROFILE%\\.claude",
   "claude_exe": "%USERPROFILE%\\.local\\bin\\claude.exe",
+  "claude_extra_dirs": [],
   "refresh_seconds": 5,
   "always_on_top": true,
   "trigger_finish_popup_on_new_codex_completion": false,
