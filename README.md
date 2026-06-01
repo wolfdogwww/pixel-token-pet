@@ -77,7 +77,7 @@ Relevant config:
   "trigger_finish_popup_on_new_codex_completion": false,
   "trigger_finish_popup_on_goal_complete": true,
   "trigger_finish_popup_on_final_response": true,
-  "finish_popup_delay_seconds": 8,
+  "finish_popup_delay_seconds": 3,
   "finish_signal_file": "finish.signal"
 }
 ```
@@ -182,7 +182,7 @@ Use `config.example.json` as the portable template:
   "trigger_finish_popup_on_new_codex_completion": false,
   "trigger_finish_popup_on_goal_complete": true,
   "trigger_finish_popup_on_final_response": true,
-  "finish_popup_delay_seconds": 8,
+  "finish_popup_delay_seconds": 3,
   "finish_signal_file": "finish.signal",
   "theme": "default_blob",
   "memory_log_enabled": true,

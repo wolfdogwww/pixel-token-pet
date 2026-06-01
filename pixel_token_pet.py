@@ -44,7 +44,7 @@ def load_config():
         "trigger_finish_popup_on_new_codex_completion": False,
         "trigger_finish_popup_on_goal_complete": True,
         "trigger_finish_popup_on_final_response": True,
-        "finish_popup_delay_seconds": 8,
+        "finish_popup_delay_seconds": 3,
         "finish_signal_file": str(APP_DIR / "finish.signal"),
         "theme": DEFAULT_THEME,
         "memory_log_enabled": True,
@@ -999,7 +999,7 @@ class PixelPet:
         response_id = int(self.turn_activity.get("latest_response_id", 0) or 0)
         command_id = int(self.turn_activity.get("latest_command_id", 0) or 0)
         if response_id > self.last_final_response_id:
-            delay = max(3, int(self.config.get("finish_popup_delay_seconds", 8)))
+            delay = max(1, int(self.config.get("finish_popup_delay_seconds", 3)))
             self.pending_final_response = {"id": response_id, "ready_at": time.time() + delay}
             self.last_final_response_id = response_id
 
