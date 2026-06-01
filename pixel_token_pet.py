@@ -33,12 +33,7 @@ RED = "#ff7c8a"
 
 
 def load_config():
-    if CONFIG_PATH.exists():
-        try:
-            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    config = {
+    defaults = {
         "codex_logs_db": str(DEFAULT_CODEX_DB),
         "codex_goals_db": str(DEFAULT_CODEX_GOALS_DB),
         "claude_dir": str(DEFAULT_CLAUDE_DIR),
@@ -53,8 +48,59 @@ def load_config():
         "memory_sample_seconds": 300,
         "memory_log_dir": str(APP_DIR / "logs"),
     }
+    if CONFIG_PATH.exists():
+        try:
+            config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            changed = False
+            for key, value in defaults.items():
+                if key not in config:
+                    config[key] = value
+                    changed = True
+            if changed:
+                save_config(config)
+            return config
+        except Exception:
+            pass
+    save_config(defaults)
+    return defaults
+
+
+def save_config(config):
     CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
-    return config
+
+
+def expand_path(value):
+    if not value:
+        return Path()
+    text = str(value)
+    if text == "finish.signal":
+        return APP_DIR / "finish.signal"
+    if text == "logs":
+        return APP_DIR / "logs"
+    return Path(os_path_expand(text))
+
+
+def os_path_expand(value):
+    import os
+
+    return os.path.expandvars(os.path.expanduser(value))
+
+
+def available_themes():
+    themes = []
+    plugins_dir = APP_DIR / "plugins"
+    if plugins_dir.exists():
+        for path in sorted(plugins_dir.iterdir()):
+            manifest = path / "pet_theme.json"
+            if not manifest.exists():
+                continue
+            try:
+                data = json.loads(manifest.read_text(encoding="utf-8"))
+                name = data.get("name", path.name)
+            except Exception:
+                name = path.name
+            themes.append({"id": path.name, "name": name})
+    return themes
 
 
 def human(n):
@@ -185,7 +231,7 @@ class UsageReader:
         self._claude_version_cache = None
 
     def codex(self):
-        db = Path(self.config.get("codex_logs_db", DEFAULT_CODEX_DB))
+        db = expand_path(self.config.get("codex_logs_db", DEFAULT_CODEX_DB))
         empty = {
             "ok": False,
             "source": str(db),
@@ -269,7 +315,7 @@ class UsageReader:
         }
 
     def codex_goal_state(self):
-        db = Path(self.config.get("codex_goals_db", DEFAULT_CODEX_GOALS_DB))
+        db = expand_path(self.config.get("codex_goals_db", DEFAULT_CODEX_GOALS_DB))
         state = {
             "ok": False,
             "latest_completed_key": "",
@@ -368,8 +414,8 @@ class UsageReader:
             except Exception:
                 result["note"] = "ccusage exists, but JSON shape was not recognized"
 
-        claude_dir = Path(self.config.get("claude_dir", DEFAULT_CLAUDE_DIR))
-        claude_exe = Path(self.config.get("claude_exe", DEFAULT_CLAUDE_EXE))
+        claude_dir = expand_path(self.config.get("claude_dir", DEFAULT_CLAUDE_DIR))
+        claude_exe = expand_path(self.config.get("claude_exe", DEFAULT_CLAUDE_EXE))
         if claude_exe.exists():
             result["installed"] = True
             if self._claude_version_cache is None:
@@ -543,7 +589,7 @@ class MemoryMonitor:
     def __init__(self, config):
         self.enabled = bool(config.get("memory_log_enabled", True))
         self.interval_seconds = max(30, int(config.get("memory_sample_seconds", 300)))
-        self.log_dir = Path(config.get("memory_log_dir", APP_DIR / "logs"))
+        self.log_dir = expand_path(config.get("memory_log_dir", APP_DIR / "logs"))
         self.last_sample = None
 
     def sample(self):
@@ -638,6 +684,8 @@ class PixelPet:
         self.frame = 0
         self.drag = None
         self.message_until = 0
+        self.settings_window = None
+        self.gear_box = (300, 14, 322, 36)
 
         root.title("Pixel Token Pet")
         root.geometry("340x286+120+120")
@@ -668,6 +716,10 @@ class PixelPet:
         self.animate()
 
     def start_drag(self, event):
+        if self.is_gear_hit(event.x, event.y):
+            self.open_settings()
+            self.drag = None
+            return "break"
         self.drag = (event.x_root, event.y_root, self.root.winfo_x(), self.root.winfo_y())
 
     def do_drag(self, event):
@@ -678,6 +730,113 @@ class PixelPet:
 
     def show_menu(self, event):
         self.menu.tk_popup(event.x_root, event.y_root)
+
+    def is_gear_hit(self, x, y):
+        x1, y1, x2, y2 = self.gear_box
+        return x1 <= x <= x2 and y1 <= y <= y2
+
+    def open_settings(self):
+        if self.settings_window and self.settings_window.winfo_exists():
+            self.settings_window.lift()
+            return
+
+        win = tk.Toplevel(self.root)
+        self.settings_window = win
+        win.title("Pixel Token Pet Settings")
+        win.configure(bg=BG)
+        win.attributes("-topmost", bool(self.config.get("always_on_top", True)))
+        win.resizable(False, False)
+        win.geometry(f"360x292+{self.root.winfo_x() + 348}+{self.root.winfo_y()}")
+
+        theme_options = available_themes()
+        theme_ids = [item["id"] for item in theme_options] or [DEFAULT_THEME]
+        theme_label = {item["id"]: f"{item['name']} ({item['id']})" for item in theme_options}
+
+        selected_theme = tk.StringVar(value=self.config.get("theme", DEFAULT_THEME))
+        always_top = tk.BooleanVar(value=bool(self.config.get("always_on_top", True)))
+        memory_enabled = tk.BooleanVar(value=bool(self.config.get("memory_log_enabled", True)))
+        refresh_seconds = tk.StringVar(value=str(self.config.get("refresh_seconds", 5)))
+        memory_seconds = tk.StringVar(value=str(self.config.get("memory_sample_seconds", 300)))
+
+        body = tk.Frame(win, bg=BG, padx=14, pady=14)
+        body.pack(fill="both", expand=True)
+        self.settings_label(body, "Theme")
+
+        theme_menu = tk.OptionMenu(body, selected_theme, *theme_ids)
+        theme_menu.configure(bg=PANEL, fg=INK, activebackground="#383348", activeforeground=INK, highlightthickness=0)
+        theme_menu["menu"].configure(bg=PANEL, fg=INK)
+        theme_menu.pack(fill="x", pady=(3, 10))
+
+        tk.Checkbutton(
+            body,
+            text="Always on top",
+            variable=always_top,
+            bg=BG,
+            fg=INK,
+            activebackground=BG,
+            activeforeground=INK,
+            selectcolor=PANEL,
+        ).pack(anchor="w")
+        tk.Checkbutton(
+            body,
+            text="Memory logging",
+            variable=memory_enabled,
+            bg=BG,
+            fg=INK,
+            activebackground=BG,
+            activeforeground=INK,
+            selectcolor=PANEL,
+        ).pack(anchor="w", pady=(0, 8))
+
+        self.settings_entry(body, "Refresh seconds", refresh_seconds)
+        self.settings_entry(body, "Memory sample seconds", memory_seconds)
+
+        hint = tk.Label(
+            body,
+            text="Changes are saved to local config.json.",
+            bg=BG,
+            fg=MUTED,
+            font=("Consolas", 8),
+            anchor="w",
+        )
+        hint.pack(fill="x", pady=(8, 10))
+
+        actions = tk.Frame(body, bg=BG)
+        actions.pack(fill="x")
+        tk.Button(actions, text="Test popup", command=self.finish_popup, bg=PANEL, fg=INK).pack(side="left")
+        tk.Button(actions, text="Save", command=lambda: save_settings(), bg=PANEL, fg=GREEN).pack(side="right")
+
+        def save_settings():
+            try:
+                refresh_value = max(1, int(refresh_seconds.get()))
+            except Exception:
+                refresh_value = 5
+            try:
+                memory_value = max(30, int(memory_seconds.get()))
+            except Exception:
+                memory_value = 300
+
+            self.config["theme"] = selected_theme.get()
+            self.config["always_on_top"] = bool(always_top.get())
+            self.config["memory_log_enabled"] = bool(memory_enabled.get())
+            self.config["refresh_seconds"] = refresh_value
+            self.config["memory_sample_seconds"] = memory_value
+            save_config(self.config)
+
+            self.theme = PetTheme.load(self.config)
+            self.memory = MemoryMonitor(self.config)
+            self.root.attributes("-topmost", bool(self.config.get("always_on_top", True)))
+            self.draw()
+            win.destroy()
+
+    def settings_label(self, parent, text_value):
+        tk.Label(parent, text=text_value, bg=BG, fg=YELLOW, font=("Consolas", 9, "bold"), anchor="w").pack(fill="x")
+
+    def settings_entry(self, parent, label, variable):
+        row = tk.Frame(parent, bg=BG)
+        row.pack(fill="x", pady=3)
+        tk.Label(row, text=label, bg=BG, fg=INK, font=("Consolas", 9), anchor="w").pack(side="left")
+        tk.Entry(row, textvariable=variable, width=8, bg=PANEL, fg=INK, insertbackground=INK).pack(side="right")
 
     def refresh(self):
         old_latest = self.codex_data.get("latest_id", 0) if hasattr(self, "codex_data") else 0
@@ -707,7 +866,7 @@ class PixelPet:
         self.root.after(self.memory.interval_seconds * 1000, self.record_memory)
 
     def check_finish_signal(self):
-        signal_path = Path(self.config.get("finish_signal_file", APP_DIR / "finish.signal"))
+        signal_path = expand_path(self.config.get("finish_signal_file", APP_DIR / "finish.signal"))
         try:
             stat = signal_path.stat()
         except FileNotFoundError:
@@ -745,11 +904,22 @@ class PixelPet:
         self.rect(x, y, max(2, int(w * min(max(pct, 0), 1))), 10, color)
         self.text(x + w + 8, y - 2, label, MUTED, 8)
 
+    def draw_gear(self):
+        x1, y1, x2, y2 = self.gear_box
+        self.rect(x1, y1, x2 - x1, y2 - y1, "#383348")
+        cx = (x1 + x2) // 2
+        cy = (y1 + y2) // 2
+        for dx, dy in ((0, -8), (0, 8), (-8, 0), (8, 0), (-6, -6), (6, -6), (-6, 6), (6, 6)):
+            self.canvas.create_line(cx, cy, cx + dx, cy + dy, fill=YELLOW, width=2)
+        self.canvas.create_oval(cx - 6, cy - 6, cx + 6, cy + 6, outline=YELLOW, width=2)
+        self.canvas.create_oval(cx - 2, cy - 2, cx + 2, cy + 2, fill=BG, outline=BG)
+
     def draw(self):
         self.canvas.delete("all")
         self.rect(0, 0, 340, 286, BG)
         self.rect(8, 8, 324, 270, PANEL)
         self.rect(12, 12, 316, 262, "#17151f")
+        self.draw_gear()
         self.draw_pet()
 
         c = self.codex_data

@@ -6,13 +6,38 @@ Pixel Token Pet loads its character art from:
 plugins/<theme_id>/pet_theme.json
 ```
 
-Select a theme by editing `config.json`:
+Select a theme from the gear settings panel or by editing `config.json`:
 
 ```json
 {
   "theme": "default_blob"
 }
 ```
+
+## Bundled Themes
+
+- `default_blob`
+- `fox`
+- `dog`
+- `cat`
+- `whale`
+- `rabbit`
+- `panda`
+- `penguin`
+- `frog`
+- `hamster`
+- `owl`
+
+Copy one of these folders when you want to make a new theme.
+
+## Creating A Plugin
+
+1. Create a folder under `plugins/`, for example `plugins/my_pet/`.
+2. Add `pet_theme.json`.
+3. Set `"theme": "my_pet"` in `config.json` or choose it from the gear settings panel.
+4. Restart the app or save settings again.
+
+Theme folders are intentionally self-contained so other people can share only the folder they made.
 
 ## Minimal Theme
 

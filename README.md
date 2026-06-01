@@ -12,6 +12,8 @@ A small pixel-style desktop pet for Windows that shows local Codex and Claude us
 - Manual completion popup by double-clicking the pet.
 - External completion popup by touching `finish.signal`.
 - Theme plugin system for replacing the pixel art and popup text.
+- Ten bundled animal themes: fox, dog, cat, whale, rabbit, panda, penguin, frog, hamster, and owl.
+- Gear button in the top-right corner for changing settings without editing JSON.
 - Daily memory usage logging for the pet process.
 
 ## Run
@@ -39,9 +41,22 @@ run_pet.bat
 ## Controls
 
 - Drag: left mouse button.
+- Settings: click the gear in the top-right corner.
 - Menu: right click.
 - Completion popup: double click.
 - Close: right-click menu, then `Close pet`.
+
+## Settings
+
+Click the gear in the top-right corner to change common settings:
+
+- Active theme.
+- Always-on-top window behavior.
+- Memory logging on/off.
+- Refresh interval.
+- Memory sample interval.
+
+Settings are saved to `config.json`, which stays local and is ignored by git.
 
 ## Completion Popup Rules
 
@@ -65,7 +80,7 @@ Relevant config:
 
 ## Memory Usage Logging
 
-The pet records its own memory usage so you can leave it running for a day and see how much RAM it uses.
+The pet records its own memory usage so you can leave it running for a day and see how much RAM it uses. The current-day memory usage is also shown directly in the pet window.
 
 Default behavior:
 
@@ -110,21 +125,40 @@ Pet art and popup text are loaded from:
 plugins/<theme_id>/pet_theme.json
 ```
 
-The built-in theme is:
+Bundled themes:
 
-```text
-default_blob
-```
+- `default_blob`
+- `fox`
+- `dog`
+- `cat`
+- `whale`
+- `rabbit`
+- `panda`
+- `penguin`
+- `frog`
+- `hamster`
+- `owl`
 
-Set the active theme in `config.json`:
+Set the active theme from the gear settings panel or in `config.json`:
 
 ```json
 {
-  "theme": "default_blob"
+  "theme": "fox"
 }
 ```
 
 See `plugins/README.md` for the plugin schema.
+
+## Sharing With Other People
+
+This app is portable:
+
+- Clone or download the repository.
+- Install Python 3 on Windows.
+- Run `run_pet_silent.vbs` for normal use or `python pixel_token_pet.py` for debugging.
+- Optional local data paths are read from `config.json`.
+
+If Codex or Claude data is not present on a machine, the app still opens and shows zero/unavailable usage instead of crashing.
 
 ## Config
 
