@@ -66,6 +66,7 @@ The popup does not fire when each shell command or tool call finishes.
 By default it fires only when:
 
 - A Codex goal changes to `complete`.
+- A Codex response finishes and no command starts during the short completion delay.
 - `finish.signal` is updated.
 - The user manually triggers it from the pet.
 
@@ -75,6 +76,8 @@ Relevant config:
 {
   "trigger_finish_popup_on_new_codex_completion": false,
   "trigger_finish_popup_on_goal_complete": true,
+  "trigger_finish_popup_on_final_response": true,
+  "finish_popup_delay_seconds": 8,
   "finish_signal_file": "finish.signal"
 }
 ```
@@ -178,6 +181,8 @@ Use `config.example.json` as the portable template:
   "always_on_top": true,
   "trigger_finish_popup_on_new_codex_completion": false,
   "trigger_finish_popup_on_goal_complete": true,
+  "trigger_finish_popup_on_final_response": true,
+  "finish_popup_delay_seconds": 8,
   "finish_signal_file": "finish.signal",
   "theme": "default_blob",
   "memory_log_enabled": true,

@@ -43,6 +43,8 @@ def load_config():
         "always_on_top": True,
         "trigger_finish_popup_on_new_codex_completion": False,
         "trigger_finish_popup_on_goal_complete": True,
+        "trigger_finish_popup_on_final_response": True,
+        "finish_popup_delay_seconds": 8,
         "finish_signal_file": str(APP_DIR / "finish.signal"),
         "theme": DEFAULT_THEME,
         "memory_log_enabled": True,
@@ -351,6 +353,51 @@ class UsageReader:
             state["latest_status"] = status
             state["latest_objective"] = objective
             state["updated_at_ms"] = int(updated_at_ms or 0)
+        return state
+
+    def codex_turn_activity(self):
+        db = expand_path(self.config.get("codex_logs_db", DEFAULT_CODEX_DB))
+        state = {
+            "ok": False,
+            "latest_response_id": 0,
+            "latest_command_id": 0,
+            "error": "",
+        }
+        if not db.exists():
+            state["error"] = "Codex log DB not found"
+            return state
+        try:
+            uri = f"file:{db.as_posix()}?mode=ro"
+            con = sqlite3.connect(uri, uri=True, timeout=1)
+            response_row = con.execute(
+                """
+                select id
+                from logs
+                where feedback_log_body like '%response.completed%'
+                  and feedback_log_body not like '%response.function_call_arguments.done%'
+                order by id desc
+                limit 1
+                """
+            ).fetchone()
+            command_row = con.execute(
+                """
+                select id
+                from logs
+                where feedback_log_body like '%commandExecution%'
+                  and feedback_log_body like '%item/started%'
+                  and feedback_log_body not like '%response.function_call_arguments.done%'
+                order by id desc
+                limit 1
+                """
+            ).fetchone()
+            con.close()
+        except Exception as exc:
+            state["error"] = str(exc)
+            return state
+
+        state["ok"] = True
+        state["latest_response_id"] = int(response_row[0] if response_row else 0)
+        state["latest_command_id"] = int(command_row[0] if command_row else 0)
         return state
 
     def _parse_codex_completion(self, body):
@@ -758,6 +805,8 @@ class PixelPet:
         self.memory_data = self.memory.record()
         self.last_codex_completion = 0
         self.last_completed_goal_key = ""
+        self.last_final_response_id = 0
+        self.pending_final_response = None
         self.last_signal_mtime = 0
         self.frame = 0
         self.drag = None
@@ -787,8 +836,10 @@ class PixelPet:
         self.codex_data = self.reader.codex()
         self.claude_data = self.reader.claude()
         self.goal_state = self.reader.codex_goal_state()
+        self.turn_activity = self.reader.codex_turn_activity()
         self.last_codex_completion = self.codex_data.get("latest_id", 0)
         self.last_completed_goal_key = self.goal_state.get("latest_completed_key", "")
+        self.last_final_response_id = self.turn_activity.get("latest_response_id", 0)
         self.refresh()
         self.record_memory()
         self.animate()
@@ -921,6 +972,7 @@ class PixelPet:
         self.codex_data = self.reader.codex()
         self.claude_data = self.reader.claude()
         self.goal_state = self.reader.codex_goal_state()
+        self.turn_activity = self.reader.codex_turn_activity()
         new_latest = self.codex_data.get("latest_id", 0)
         if (
             old_latest
@@ -934,10 +986,34 @@ class PixelPet:
                 self.finish_popup()
             if completed_key:
                 self.last_completed_goal_key = completed_key
+        self.check_final_response_completion()
         self.check_finish_signal()
         self.last_codex_completion = new_latest
         self.draw()
         self.root.after(int(self.config.get("refresh_seconds", 5)) * 1000, self.refresh)
+
+    def check_final_response_completion(self):
+        if not self.config.get("trigger_finish_popup_on_final_response", True):
+            return
+
+        response_id = int(self.turn_activity.get("latest_response_id", 0) or 0)
+        command_id = int(self.turn_activity.get("latest_command_id", 0) or 0)
+        if response_id > self.last_final_response_id:
+            delay = max(3, int(self.config.get("finish_popup_delay_seconds", 8)))
+            self.pending_final_response = {"id": response_id, "ready_at": time.time() + delay}
+            self.last_final_response_id = response_id
+
+        if not self.pending_final_response:
+            return
+
+        pending_id = int(self.pending_final_response.get("id", 0))
+        ready_at = float(self.pending_final_response.get("ready_at", 0))
+        if command_id > pending_id:
+            self.pending_final_response = None
+            return
+        if time.time() >= ready_at:
+            self.pending_final_response = None
+            self.finish_popup()
 
     def record_memory(self):
         self.memory_data = self.memory.record()
