@@ -19,6 +19,8 @@ DEFAULT_CLAUDE_DIR = Path.home() / ".claude"
 DEFAULT_CLAUDE_EXE = Path.home() / ".local" / "bin" / "claude.exe"
 DEFAULT_THEME = "default_blob"
 
+NORMAL_W, NORMAL_H = 360, 320
+COMPACT_W, COMPACT_H = 360, 92
 
 PIXEL = 6
 BG = "#17151f"
@@ -31,6 +33,129 @@ YELLOW = "#ffe78a"
 BLUE = "#7bd7ff"
 RED = "#ff7c8a"
 
+# Claude popup palette
+CLAUDE_BG = "#0d1117"
+CLAUDE_INNER = "#13101e"
+CLAUDE_BORDER = "#7c6ff7"
+CLAUDE_TITLE = "#a78bfa"
+CLAUDE_BODY = "#e2e8f0"
+CLAUDE_MUTED = "#6e7c8c"
+CLAUDE_PARTICLES = ["#7c6ff7", "#a78bfa", "#c4b5fd", "#818cf8", "#6366f1"]
+
+_LANG = {
+    "en": {
+        # right-click menu
+        "compact_view":   "Compact view",
+        "full_view":      "Full view",
+        "min_to_tray":    "Minimize to tray",
+        "snap_tray":      "Snap to tray corner",
+        "refresh":        "Refresh",
+        "close_pet":      "Close pet",
+        "eng_done_anim":  "⚙ Done animation",
+        "eng_claude_pop": "⚙ Claude popup",
+        # settings window
+        "settings_title": "Pixel Token Pet Settings",
+        "lbl_theme":      "Theme",
+        "lbl_display":    "Display",
+        "ck_always_top":  "Always on top",
+        "ck_memory_log":  "Memory logging",
+        "ck_snap_tray":   "Start at system tray corner",
+        "entry_refresh":  "Refresh seconds",
+        "entry_mem_smp":  "Memory sample seconds",
+        "lbl_triggers":   "Triggers",
+        "ck_pop_codex":   "Pop on new Codex completion",
+        "ck_pop_goal":    "Pop on goal complete",
+        "ck_pop_final":   "Pop on final response",
+        "entry_delay":    "Popup delay (seconds)",
+        "ck_pop_claude":  "Pop on new Claude completion",
+        "entry_idle":     "Claude idle seconds",
+        "lbl_language":   "Language",
+        "save_hint":      "Changes are saved to local config.json.",
+        "btn_test_codex": "⚙ Test Codex",
+        "btn_test_claude":"⚙ Test Claude",
+        "btn_save":       "Save",
+        # main window overlays
+        "done_codex":     "Done! Codex finished.",
+        "done_claude":    "Done! Claude session.",
+        "eng_on":         "⚙ ENGINEER MODE ON",
+        "eng_off":        "⚙ ENGINEER MODE OFF",
+        "not_connected":  "usage: not connected",
+        # data labels
+        "lbl_today_io":   "today in/out : ",
+        "lbl_today_tot":  "today total  : ",
+        "lbl_cache_rsn":  "cached/reason: ",
+        "lbl_all_tok":    "all tokens   : ",
+        "lbl_latest":     "latest ",
+        "lbl_cl_today":   "today total: ",
+        "lbl_io_cache":   "in/out/cache: ",
+        "lbl_month":      "month total: ",
+        "lbl_mem":        "MEM now/avg/max: ",
+        "lbl_mem_smp":    " MB  samples ",
+    },
+    "zh": {
+        # right-click menu
+        "compact_view":   "精簡模式",
+        "full_view":      "完整模式",
+        "min_to_tray":    "縮到系統匣",
+        "snap_tray":      "貼齊右下角",
+        "refresh":        "重新整理",
+        "close_pet":      "關閉寵物",
+        "eng_done_anim":  "⚙ 完成動畫",
+        "eng_claude_pop": "⚙ Claude 彈窗",
+        # settings window
+        "settings_title": "Pixel Token Pet 設定",
+        "lbl_theme":      "主題",
+        "lbl_display":    "顯示",
+        "ck_always_top":  "永遠在最上層",
+        "ck_memory_log":  "記憶體記錄",
+        "ck_snap_tray":   "啟動時貼齊右下角",
+        "entry_refresh":  "更新間隔（秒）",
+        "entry_mem_smp":  "記憶體取樣間隔（秒）",
+        "lbl_triggers":   "觸發設定",
+        "ck_pop_codex":   "新 Codex 完成時彈出",
+        "ck_pop_goal":    "目標完成時彈出",
+        "ck_pop_final":   "最後回應完成後彈出",
+        "entry_delay":    "彈出延遲（秒）",
+        "ck_pop_claude":  "新 Claude 完成時彈出",
+        "entry_idle":     "Claude 閒置秒數",
+        "lbl_language":   "語言 / Language",
+        "save_hint":      "設定已儲存至 config.json。",
+        "btn_test_codex": "⚙ 測試 Codex",
+        "btn_test_claude":"⚙ 測試 Claude",
+        "btn_save":       "儲存",
+        # main window overlays
+        "done_codex":     "完成！Codex 任務結束。",
+        "done_claude":    "完成！Claude 工作階段結束。",
+        "eng_on":         "⚙ 工程師模式 已開啟",
+        "eng_off":        "⚙ 工程師模式 已關閉",
+        "not_connected":  "未連線",
+        # data labels
+        "lbl_today_io":   "今日輸入/輸出：",
+        "lbl_today_tot":  "今日合計：     ",
+        "lbl_cache_rsn":  "快取/推理：    ",
+        "lbl_all_tok":    "總計代幣：     ",
+        "lbl_latest":     "最後 ",
+        "lbl_cl_today":   "今日合計：",
+        "lbl_io_cache":   "輸入/輸出/快取：",
+        "lbl_month":      "月合計：  ",
+        "lbl_mem":        "記憶體 現在/平均/最高：",
+        "lbl_mem_smp":    " MB  取樣 ",
+    },
+}
+
+
+def get_work_area():
+    """Return Windows work area (screen minus taskbar) as a RECT-like object."""
+    class _RECT(ctypes.Structure):
+        _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
+                    ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+    rect = _RECT()
+    try:
+        ctypes.windll.user32.SystemParametersInfoW(0x30, 0, ctypes.byref(rect), 0)
+    except Exception:
+        rect.right, rect.bottom = 1920, 1040
+    return rect
+
 
 def load_config():
     defaults = {
@@ -41,10 +166,14 @@ def load_config():
         "claude_extra_dirs": [],
         "refresh_seconds": 5,
         "always_on_top": True,
+        "language": "en",
+        "snap_to_tray": False,
         "trigger_finish_popup_on_new_codex_completion": False,
         "trigger_finish_popup_on_goal_complete": True,
         "trigger_finish_popup_on_final_response": True,
         "finish_popup_delay_seconds": 3,
+        "trigger_claude_popup_on_new_completion": False,
+        "claude_idle_seconds": 30,
         "finish_signal_file": str(APP_DIR / "finish.signal"),
         "theme": DEFAULT_THEME,
         "memory_log_enabled": True,
@@ -795,6 +924,109 @@ class MemoryMonitor:
         }
 
 
+class _TrayIcon:
+    """Minimal Windows system-tray icon using Shell_NotifyIcon + WndProc subclass."""
+
+    _WM_TRAYICON = 0x0401      # WM_USER + 1 — our private callback message
+    _NIM_ADD = 0
+    _NIM_DELETE = 2
+    _NIF_MESSAGE = 0x1
+    _NIF_ICON = 0x2
+    _NIF_TIP = 0x4
+    _IDI_APPLICATION = 32512
+    _GWLP_WNDPROC = -4
+    _WM_LBUTTONUP = 0x0202
+    _WM_LBUTTONDBLCLK = 0x0203
+
+    class _NID(ctypes.Structure):
+        _fields_ = [
+            ("cbSize",          wintypes.DWORD),
+            ("hWnd",            wintypes.HWND),
+            ("uID",             wintypes.UINT),
+            ("uFlags",          wintypes.UINT),
+            ("uCallbackMessage",wintypes.UINT),
+            ("hIcon",           wintypes.HICON),
+            ("szTip",           ctypes.c_wchar * 128),
+        ]
+
+    def __init__(self, hwnd, on_restore):
+        self._hwnd = hwnd
+        self._on_restore = on_restore
+        self._proc_ref = None   # must stay alive while registered
+        self._old_proc = None
+        self._active = False
+
+    def show(self):
+        if self._active:
+            return
+        u32 = ctypes.windll.user32
+        hicon = u32.LoadIconW(None, self._IDI_APPLICATION)
+        nid = self._NID()
+        nid.cbSize = ctypes.sizeof(self._NID)
+        nid.hWnd = self._hwnd
+        nid.uID = 1
+        nid.uFlags = self._NIF_MESSAGE | self._NIF_ICON | self._NIF_TIP
+        nid.uCallbackMessage = self._WM_TRAYICON
+        nid.hIcon = hicon
+        nid.szTip = "Pixel Token Pet"
+        ctypes.windll.shell32.Shell_NotifyIconW(self._NIM_ADD, ctypes.byref(nid))
+
+        # Subclass the window's WndProc to intercept tray callback messages.
+        try:
+            get_ptr = u32.GetWindowLongPtrW
+            set_ptr = u32.SetWindowLongPtrW
+        except AttributeError:
+            get_ptr = u32.GetWindowLongW
+            set_ptr = u32.SetWindowLongW
+        get_ptr.restype = ctypes.c_ssize_t
+        set_ptr.restype = ctypes.c_ssize_t
+
+        old = get_ptr(self._hwnd, self._GWLP_WNDPROC)
+        self._old_proc = old
+
+        WM = self._WM_TRAYICON
+        LBU = self._WM_LBUTTONUP
+        LBD = self._WM_LBUTTONDBLCLK
+        restore = self._on_restore
+
+        PFUNC = ctypes.WINFUNCTYPE(
+            ctypes.c_ssize_t,
+            wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+        )
+
+        @PFUNC
+        def _proc(hwnd, msg, wp, lp):
+            if msg == WM and lp in (LBU, LBD):
+                restore()
+                return 0
+            return u32.CallWindowProcW(old, hwnd, msg, wp, lp)
+
+        self._proc_ref = _proc
+        set_ptr(self._hwnd, self._GWLP_WNDPROC, _proc)
+        self._active = True
+
+    def hide(self):
+        if not self._active:
+            return
+        nid = self._NID()
+        nid.cbSize = ctypes.sizeof(self._NID)
+        nid.hWnd = self._hwnd
+        nid.uID = 1
+        ctypes.windll.shell32.Shell_NotifyIconW(self._NIM_DELETE, ctypes.byref(nid))
+        try:
+            u32 = ctypes.windll.user32
+            try:
+                set_ptr = u32.SetWindowLongPtrW
+            except AttributeError:
+                set_ptr = u32.SetWindowLongW
+            set_ptr.restype = ctypes.c_ssize_t
+            set_ptr(self._hwnd, self._GWLP_WNDPROC, self._old_proc)
+        except Exception:
+            pass
+        self._proc_ref = None
+        self._active = False
+
+
 class PixelPet:
     def __init__(self, root):
         self.root = root
@@ -806,32 +1038,44 @@ class PixelPet:
         self.last_codex_completion = 0
         self.last_completed_goal_key = ""
         self.last_final_response_id = 0
+        self.last_claude_calls = 0
         self.pending_final_response = None
+        self._pending_claude_popup = None
         self.last_signal_mtime = 0
         self.frame = 0
         self.drag = None
         self.message_until = 0
+        self.done_label = ""
         self.settings_window = None
-        self.gear_box = (300, 14, 322, 36)
+        self.compact = False
+        self.engineer_mode = False
+        self._gear_clicks = []
+        self._tray = None
+        self.gear_box = (330, 14, 352, 36)
+        self.close_box = (10, 14, 32, 36)
 
         root.title("Pixel Token Pet")
-        root.geometry("340x286+120+120")
+        if self.config.get("snap_to_tray", False):
+            rect = get_work_area()
+            sx = rect.right - NORMAL_W - 4
+            sy = rect.bottom - NORMAL_H - 4
+            root.geometry(f"{NORMAL_W}x{NORMAL_H}+{sx}+{sy}")
+        else:
+            root.geometry(f"{NORMAL_W}x{NORMAL_H}+120+120")
         root.configure(bg=BG)
         root.overrideredirect(True)
         root.attributes("-topmost", bool(self.config.get("always_on_top", True)))
 
-        self.canvas = tk.Canvas(root, width=340, height=286, highlightthickness=0, bg=BG)
+        self.canvas = tk.Canvas(root, width=NORMAL_W, height=NORMAL_H, highlightthickness=0, bg=BG)
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<ButtonPress-1>", self.start_drag)
         self.canvas.bind("<B1-Motion>", self.do_drag)
         self.canvas.bind("<Double-Button-1>", lambda _e: self.finish_popup())
         self.canvas.bind("<Button-3>", self.show_menu)
+        root.bind("<Destroy>", lambda _e: self._cleanup_tray())
 
         self.menu = tk.Menu(root, tearoff=0)
-        self.menu.add_command(label="Done animation", command=self.finish_popup)
-        self.menu.add_command(label="Refresh", command=self.refresh)
-        self.menu.add_separator()
-        self.menu.add_command(label="Close pet", command=root.destroy)
+        self._rebuild_menu()
 
         self.codex_data = self.reader.codex()
         self.claude_data = self.reader.claude()
@@ -840,13 +1084,31 @@ class PixelPet:
         self.last_codex_completion = self.codex_data.get("latest_id", 0)
         self.last_completed_goal_key = self.goal_state.get("latest_completed_key", "")
         self.last_final_response_id = self.turn_activity.get("latest_response_id", 0)
+        self.last_claude_calls = self.claude_data.get("today", {}).get("calls", 0)
         self.refresh()
         self.record_memory()
         self.animate()
 
+    def t(self, key):
+        lang = self.config.get("language", "en")
+        table = _LANG.get(lang, _LANG["en"])
+        return table.get(key, _LANG["en"].get(key, key))
+
+    # ── drag & hit testing ──────────────────────────────────────────────────
+
     def start_drag(self, event):
+        if self.is_close_hit(event.x, event.y):
+            self.root.destroy()
+            return "break"
         if self.is_gear_hit(event.x, event.y):
-            self.open_settings()
+            now = time.time()
+            self._gear_clicks = [t for t in self._gear_clicks if now - t < 3.0]
+            self._gear_clicks.append(now)
+            if len(self._gear_clicks) >= 5:
+                self._gear_clicks = []
+                self._toggle_engineer_mode()
+            else:
+                self.open_settings()
             self.drag = None
             return "break"
         self.drag = (event.x_root, event.y_root, self.root.winfo_x(), self.root.winfo_y())
@@ -864,6 +1126,80 @@ class PixelPet:
         x1, y1, x2, y2 = self.gear_box
         return x1 <= x <= x2 and y1 <= y <= y2
 
+    def is_close_hit(self, x, y):
+        x1, y1, x2, y2 = self.close_box
+        return x1 <= x <= x2 and y1 <= y <= y2
+
+    # ── menu / engineer mode / tray ─────────────────────────────────────────
+
+    def _rebuild_menu(self):
+        self.menu.delete(0, "end")
+        compact_label = self.t("full_view") if self.compact else self.t("compact_view")
+        self.menu.add_command(label=compact_label, command=self.toggle_compact)
+        self.menu.add_command(label=self.t("min_to_tray"), command=self.minimize_to_tray)
+        self.menu.add_command(label=self.t("snap_tray"), command=self.snap_to_tray)
+        self.menu.add_separator()
+        if self.engineer_mode:
+            self.menu.add_command(label=self.t("eng_done_anim"), command=self.finish_popup)
+            self.menu.add_command(label=self.t("eng_claude_pop"), command=self.claude_popup)
+            self.menu.add_separator()
+        self.menu.add_command(label=self.t("refresh"), command=self.refresh)
+        self.menu.add_separator()
+        self.menu.add_command(label=self.t("close_pet"), command=self.root.destroy)
+
+    def _toggle_engineer_mode(self):
+        self.engineer_mode = not self.engineer_mode
+        self._rebuild_menu()
+        if self.settings_window and self.settings_window.winfo_exists():
+            self.settings_window.destroy()
+        self.done_label = self.t("eng_on") if self.engineer_mode else self.t("eng_off")
+        self.message_until = time.time() + 2.5
+        self.draw()
+
+    def snap_to_tray(self):
+        rect = get_work_area()
+        h = COMPACT_H if self.compact else NORMAL_H
+        x = rect.right - NORMAL_W - 4
+        y = rect.bottom - h - 4
+        self.root.geometry(f"{NORMAL_W}x{h}+{x}+{y}")
+
+    def minimize_to_tray(self):
+        self.root.update_idletasks()
+        hwnd = ctypes.windll.user32.FindWindowW(None, "Pixel Token Pet")
+        if hwnd and self._tray is None:
+            self._tray = _TrayIcon(hwnd, self._restore_from_tray)
+        if self._tray:
+            self._tray.show()
+        self.root.withdraw()
+
+    def _restore_from_tray(self):
+        if self._tray:
+            self._tray.hide()
+            self._tray = None
+        self.root.deiconify()
+        self.root.lift()
+        self.root.attributes("-topmost", bool(self.config.get("always_on_top", True)))
+
+    def _cleanup_tray(self):
+        if self._tray:
+            try:
+                self._tray.hide()
+            except Exception:
+                pass
+            self._tray = None
+
+    # ── compact toggle ──────────────────────────────────────────────────────
+
+    def toggle_compact(self):
+        self.compact = not self.compact
+        wx, wy = self.root.winfo_x(), self.root.winfo_y()
+        h = COMPACT_H if self.compact else NORMAL_H
+        self.root.geometry(f"{NORMAL_W}x{h}+{wx}+{wy}")
+        self._rebuild_menu()
+        self.draw()
+
+    # ── settings panel ──────────────────────────────────────────────────────
+
     def open_settings(self):
         if self.settings_window and self.settings_window.winfo_exists():
             self.settings_window.lift()
@@ -871,69 +1207,79 @@ class PixelPet:
 
         win = tk.Toplevel(self.root)
         self.settings_window = win
-        win.title("Pixel Token Pet Settings")
+        win.title(self.t("settings_title"))
         win.configure(bg=BG)
         win.attributes("-topmost", bool(self.config.get("always_on_top", True)))
         win.resizable(False, False)
-        win.geometry(f"360x292+{self.root.winfo_x() + 348}+{self.root.winfo_y()}")
+        wx = self.root.winfo_x() + self.root.winfo_width() + 8
+        wy = self.root.winfo_y()
+        win_h = 490 if self.engineer_mode else 470
+        win.geometry(f"380x{win_h}+{wx}+{wy}")
 
         theme_options = available_themes()
         theme_ids = [item["id"] for item in theme_options] or [DEFAULT_THEME]
-        theme_label = {item["id"]: f"{item['name']} ({item['id']})" for item in theme_options}
 
         selected_theme = tk.StringVar(value=self.config.get("theme", DEFAULT_THEME))
         always_top = tk.BooleanVar(value=bool(self.config.get("always_on_top", True)))
         memory_enabled = tk.BooleanVar(value=bool(self.config.get("memory_log_enabled", True)))
         refresh_seconds = tk.StringVar(value=str(self.config.get("refresh_seconds", 5)))
         memory_seconds = tk.StringVar(value=str(self.config.get("memory_sample_seconds", 300)))
+        pop_new_codex = tk.BooleanVar(value=bool(self.config.get("trigger_finish_popup_on_new_codex_completion", False)))
+        pop_goal = tk.BooleanVar(value=bool(self.config.get("trigger_finish_popup_on_goal_complete", True)))
+        pop_final = tk.BooleanVar(value=bool(self.config.get("trigger_finish_popup_on_final_response", True)))
+        popup_delay = tk.StringVar(value=str(self.config.get("finish_popup_delay_seconds", 3)))
+        pop_claude = tk.BooleanVar(value=bool(self.config.get("trigger_claude_popup_on_new_completion", False)))
+        claude_idle = tk.StringVar(value=str(self.config.get("claude_idle_seconds", 30)))
+        snap_tray = tk.BooleanVar(value=bool(self.config.get("snap_to_tray", False)))
+        lang_var = tk.StringVar(value=self.config.get("language", "en"))
 
-        body = tk.Frame(win, bg=BG, padx=14, pady=14)
+        body = tk.Frame(win, bg=BG, padx=14, pady=12)
         body.pack(fill="both", expand=True)
-        self.settings_label(body, "Theme")
 
+        ck = dict(bg=BG, fg=INK, activebackground=BG, activeforeground=INK, selectcolor=PANEL, font=("Consolas", 9))
+
+        # Language selector (always at top, always in bilingual label)
+        lang_row = tk.Frame(body, bg=BG)
+        lang_row.pack(fill="x", pady=(0, 8))
+        tk.Label(lang_row, text=_LANG["zh"]["lbl_language"], bg=BG, fg=YELLOW,
+                 font=("Consolas", 9, "bold"), anchor="w").pack(side="left")
+        for code, label in (("en", "English"), ("zh", "中文")):
+            tk.Radiobutton(lang_row, text=label, variable=lang_var, value=code,
+                           bg=BG, fg=INK, activebackground=BG, activeforeground=INK,
+                           selectcolor=PANEL, font=("Consolas", 9)).pack(side="left", padx=(8, 0))
+
+        self.settings_label(body, self.t("lbl_theme"))
         theme_menu = tk.OptionMenu(body, selected_theme, *theme_ids)
         theme_menu.configure(bg=PANEL, fg=INK, activebackground="#383348", activeforeground=INK, highlightthickness=0)
         theme_menu["menu"].configure(bg=PANEL, fg=INK)
-        theme_menu.pack(fill="x", pady=(3, 10))
+        theme_menu.pack(fill="x", pady=(3, 8))
 
-        tk.Checkbutton(
-            body,
-            text="Always on top",
-            variable=always_top,
-            bg=BG,
-            fg=INK,
-            activebackground=BG,
-            activeforeground=INK,
-            selectcolor=PANEL,
-        ).pack(anchor="w")
-        tk.Checkbutton(
-            body,
-            text="Memory logging",
-            variable=memory_enabled,
-            bg=BG,
-            fg=INK,
-            activebackground=BG,
-            activeforeground=INK,
-            selectcolor=PANEL,
-        ).pack(anchor="w", pady=(0, 8))
+        self.settings_label(body, self.t("lbl_display"))
+        tk.Checkbutton(body, text=self.t("ck_always_top"), variable=always_top, **ck).pack(anchor="w")
+        tk.Checkbutton(body, text=self.t("ck_memory_log"), variable=memory_enabled, **ck).pack(anchor="w")
+        tk.Checkbutton(body, text=self.t("ck_snap_tray"), variable=snap_tray, **ck).pack(anchor="w", pady=(0, 4))
+        self.settings_entry(body, self.t("entry_refresh"), refresh_seconds)
+        self.settings_entry(body, self.t("entry_mem_smp"), memory_seconds)
 
-        self.settings_entry(body, "Refresh seconds", refresh_seconds)
-        self.settings_entry(body, "Memory sample seconds", memory_seconds)
+        tk.Frame(body, bg=MUTED, height=1).pack(fill="x", pady=(10, 4))
+        self.settings_label(body, self.t("lbl_triggers"))
+        tk.Checkbutton(body, text=self.t("ck_pop_codex"), variable=pop_new_codex, **ck).pack(anchor="w")
+        tk.Checkbutton(body, text=self.t("ck_pop_goal"), variable=pop_goal, **ck).pack(anchor="w")
+        tk.Checkbutton(body, text=self.t("ck_pop_final"), variable=pop_final, **ck).pack(anchor="w", pady=(0, 4))
+        self.settings_entry(body, self.t("entry_delay"), popup_delay)
+        tk.Frame(body, bg="#383348", height=1).pack(fill="x", pady=(6, 4))
+        tk.Checkbutton(body, text=self.t("ck_pop_claude"), variable=pop_claude, **ck).pack(anchor="w")
+        self.settings_entry(body, self.t("entry_idle"), claude_idle)
 
-        hint = tk.Label(
-            body,
-            text="Changes are saved to local config.json.",
-            bg=BG,
-            fg=MUTED,
-            font=("Consolas", 8),
-            anchor="w",
-        )
-        hint.pack(fill="x", pady=(8, 10))
+        tk.Frame(body, bg=MUTED, height=1).pack(fill="x", pady=(8, 4))
+        tk.Label(body, text=self.t("save_hint"), bg=BG, fg=MUTED, font=("Consolas", 8), anchor="w").pack(fill="x", pady=(2, 8))
 
         actions = tk.Frame(body, bg=BG)
         actions.pack(fill="x")
-        tk.Button(actions, text="Test popup", command=self.finish_popup, bg=PANEL, fg=INK).pack(side="left")
-        tk.Button(actions, text="Save", command=lambda: save_settings(), bg=PANEL, fg=GREEN).pack(side="right")
+        if self.engineer_mode:
+            tk.Button(actions, text=self.t("btn_test_codex"), command=self.finish_popup, bg=PANEL, fg=INK).pack(side="left")
+            tk.Button(actions, text=self.t("btn_test_claude"), command=self.claude_popup, bg=PANEL, fg=CLAUDE_TITLE).pack(side="left", padx=(6, 0))
+        tk.Button(actions, text=self.t("btn_save"), command=lambda: save_settings(), bg=PANEL, fg=GREEN).pack(side="right")
 
         def save_settings():
             try:
@@ -944,17 +1290,33 @@ class PixelPet:
                 memory_value = max(30, int(memory_seconds.get()))
             except Exception:
                 memory_value = 300
+            try:
+                delay_value = max(1, int(popup_delay.get()))
+            except Exception:
+                delay_value = 3
 
             self.config["theme"] = selected_theme.get()
             self.config["always_on_top"] = bool(always_top.get())
             self.config["memory_log_enabled"] = bool(memory_enabled.get())
             self.config["refresh_seconds"] = refresh_value
             self.config["memory_sample_seconds"] = memory_value
+            self.config["trigger_finish_popup_on_new_codex_completion"] = bool(pop_new_codex.get())
+            self.config["trigger_finish_popup_on_goal_complete"] = bool(pop_goal.get())
+            self.config["trigger_finish_popup_on_final_response"] = bool(pop_final.get())
+            self.config["finish_popup_delay_seconds"] = delay_value
+            self.config["trigger_claude_popup_on_new_completion"] = bool(pop_claude.get())
+            try:
+                self.config["claude_idle_seconds"] = max(5, int(claude_idle.get()))
+            except Exception:
+                self.config["claude_idle_seconds"] = 30
+            self.config["snap_to_tray"] = bool(snap_tray.get())
+            self.config["language"] = lang_var.get()
             save_config(self.config)
 
             self.theme = PetTheme.load(self.config)
             self.memory = MemoryMonitor(self.config)
             self.root.attributes("-topmost", bool(self.config.get("always_on_top", True)))
+            self._rebuild_menu()
             self.draw()
             win.destroy()
 
@@ -967,6 +1329,8 @@ class PixelPet:
         tk.Label(row, text=label, bg=BG, fg=INK, font=("Consolas", 9), anchor="w").pack(side="left")
         tk.Entry(row, textvariable=variable, width=8, bg=PANEL, fg=INK, insertbackground=INK).pack(side="right")
 
+    # ── data refresh ────────────────────────────────────────────────────────
+
     def refresh(self):
         old_latest = self.codex_data.get("latest_id", 0) if hasattr(self, "codex_data") else 0
         self.codex_data = self.reader.codex()
@@ -974,21 +1338,36 @@ class PixelPet:
         self.goal_state = self.reader.codex_goal_state()
         self.turn_activity = self.reader.codex_turn_activity()
         new_latest = self.codex_data.get("latest_id", 0)
+
         if (
             old_latest
             and new_latest > old_latest
             and self.config.get("trigger_finish_popup_on_new_codex_completion", True)
         ):
             self.finish_popup()
+
         if self.config.get("trigger_finish_popup_on_goal_complete", True):
             completed_key = self.goal_state.get("latest_completed_key", "")
             if completed_key and self.last_completed_goal_key and completed_key != self.last_completed_goal_key:
                 self.finish_popup()
             if completed_key:
                 self.last_completed_goal_key = completed_key
+
         self.check_final_response_completion()
         self.check_finish_signal()
         self.last_codex_completion = new_latest
+
+        new_claude_calls = self.claude_data.get("today", {}).get("calls", 0)
+        if self.config.get("trigger_claude_popup_on_new_completion", False):
+            if self.last_claude_calls and new_claude_calls > self.last_claude_calls:
+                # Reset idle timer — fire only after Claude goes quiet
+                idle = max(5, int(self.config.get("claude_idle_seconds", 30)))
+                self._pending_claude_popup = time.time() + idle
+            if self._pending_claude_popup and time.time() >= self._pending_claude_popup:
+                self._pending_claude_popup = None
+                self.claude_popup()
+        self.last_claude_calls = new_claude_calls
+
         self.draw()
         self.root.after(int(self.config.get("refresh_seconds", 5)) * 1000, self.refresh)
 
@@ -1031,6 +1410,8 @@ class PixelPet:
             self.last_signal_mtime = stat.st_mtime
             self.finish_popup()
 
+    # ── drawing primitives ──────────────────────────────────────────────────
+
     def rect(self, x, y, w, h, color):
         self.canvas.create_rectangle(x, y, x + w, y + h, fill=color, outline=color)
 
@@ -1068,104 +1449,232 @@ class PixelPet:
         self.canvas.create_oval(cx - 6, cy - 6, cx + 6, cy + 6, outline=YELLOW, width=2)
         self.canvas.create_oval(cx - 2, cy - 2, cx + 2, cy + 2, fill=BG, outline=BG)
 
+    def draw_close(self):
+        x1, y1, x2, y2 = self.close_box
+        self.rect(x1, y1, x2 - x1, y2 - y1, "#383348")
+        cx = (x1 + x2) // 2
+        cy = (y1 + y2) // 2
+        m = 5
+        self.canvas.create_line(cx - m, cy - m, cx + m, cy + m, fill=RED, width=2)
+        self.canvas.create_line(cx + m, cy - m, cx - m, cy + m, fill=RED, width=2)
+
+    def draw_status_dot(self, x, y, ok):
+        color = GREEN if ok else RED
+        self.canvas.create_oval(x, y, x + 8, y + 8, fill=color, outline="")
+
+    # ── main draw ───────────────────────────────────────────────────────────
+
     def draw(self):
+        if self.compact:
+            self._draw_compact()
+            return
+
         self.canvas.delete("all")
-        self.rect(0, 0, 340, 286, BG)
-        self.rect(8, 8, 324, 270, PANEL)
-        self.rect(12, 12, 316, 262, "#17151f")
+        self.rect(0, 0, NORMAL_W, NORMAL_H, BG)
+        self.rect(8, 8, NORMAL_W - 16, NORMAL_H - 16, PANEL)
+        self.rect(12, 12, NORMAL_W - 24, NORMAL_H - 24, "#17151f")
         self.draw_gear()
+        self.draw_close()
         self.draw_pet()
 
+        # ── Codex section ──
         c = self.codex_data
         today = c["today"]
         all_time = c["all"]
         y = 88
-        self.text(24, y, "CODEX", BLUE, 12)
+        self.draw_status_dot(14, y + 4, c["ok"])
+        self.text(27, y, "CODEX", BLUE, 12)
         if c["ok"]:
-            self.text(24, y + 20, f"today in/out : {human(today['input'])} / {human(today['output'])}", INK, 10)
-            self.text(24, y + 38, f"today total  : {human(today['total'])}  calls {today['calls']}", INK, 10)
-            self.text(24, y + 56, f"cached/reason: {human(today['cached'])} / {human(today['reasoning'])}", MUTED, 9)
-            self.text(24, y + 74, f"all tokens   : {human(all_time['total'])}", MUTED, 9)
-            self.text(24, y + 92, f"latest {c['latest_time']} {c['latest_model']}", GREEN, 9)
+            self.text(27, y + 20, f"{self.t('lbl_today_io')}{human(today['input'])} / {human(today['output'])}", INK, 10)
+            self.text(27, y + 38, f"{self.t('lbl_today_tot')}{human(today['total'])}  calls {today['calls']}", INK, 10)
+            self.text(27, y + 56, f"{self.t('lbl_cache_rsn')}{human(today['cached'])} / {human(today['reasoning'])}", MUTED, 9)
+            self.text(27, y + 74, f"{self.t('lbl_all_tok')}{human(all_time['total'])}", MUTED, 9)
+            self.text(27, y + 92, f"{self.t('lbl_latest')}{c['latest_time']} {c['latest_model']}", GREEN, 9)
             denom = max(today["input"] + today["output"] + today["cached"], 1)
-            self.draw_bar(205, y + 23, 70, today["output"] / denom, PINK, "out")
-            self.draw_bar(205, y + 45, 70, today["cached"] / denom, BLUE, "cache")
+            self.draw_bar(215, y + 23, 80, today["output"] / denom, PINK, "out")
+            self.draw_bar(215, y + 45, 80, today["cached"] / denom, BLUE, "cache")
         else:
-            self.text(24, y + 24, c["error"], RED, 9)
+            self.text(27, y + 24, c["error"], RED, 9)
 
+        # ── separator ──
+        self.canvas.create_line(24, 196, NORMAL_W - 24, 196, fill=MUTED, width=1)
+
+        # ── Claude section ──
         cl = self.claude_data
-        y = 205
-        self.text(24, y, "CLAUDE", PINK, 12)
+        y = 204
+        self.draw_status_dot(14, y + 4, cl["ok"])
+        self.text(27, y, "CLAUDE", PINK, 12)
         if cl["ok"]:
             ct = cl["today"]
             cm = cl["month"]
-            self.text(24, y + 20, f"today total: {human(ct['total'])}  calls {ct['calls']}", INK, 10)
-            self.text(24, y + 38, f"in/out/cache: {human(ct['input'])}/{human(ct['output'])}/{human(ct['cached'])}", MUTED, 8)
+            cost_str = f"  ${ct['cost']:.3f}" if ct.get("cost", 0) > 0.0001 else ""
+            self.text(27, y + 20, f"{self.t('lbl_cl_today')}{human(ct['total'])}  calls {ct['calls']}{cost_str}", INK, 10)
+            self.text(27, y + 38, f"{self.t('lbl_io_cache')}{human(ct['input'])}/{human(ct['output'])}/{human(ct['cached'])}", MUTED, 8)
             if ct["calls"]:
-                self.text(24, y + 54, f"month total: {human(cm['total'])}", MUTED, 8)
+                month_cost = f"  ${cm['cost']:.3f}" if cm.get("cost", 0) > 0.0001 else ""
+                self.text(27, y + 54, f"{self.t('lbl_month')}{human(cm['total'])}{month_cost}", MUTED, 8)
             else:
-                self.text(24, y + 54, cl["note"], MUTED, 8)
+                self.text(27, y + 54, cl["note"], MUTED, 8)
         else:
-            self.text(24, y + 20, "usage: not connected", YELLOW, 10)
-            self.text(24, y + 38, cl["note"], MUTED, 8)
+            self.text(27, y + 20, self.t("not_connected"), YELLOW, 10)
+            self.text(27, y + 38, cl["note"], MUTED, 8)
 
+        # ── memory footer ──
         mem = self.memory.today_summary()
         self.text(
-            24,
-            268,
-            f"MEM now/avg/max: {mem['current_mb']}/{mem['avg_mb']}/{mem['max_mb']} MB  samples {mem['samples']}",
-            MUTED,
-            7,
+            24, 302,
+            f"{self.t('lbl_mem')}{mem['current_mb']}/{mem['avg_mb']}/{mem['max_mb']}{self.t('lbl_mem_smp')}{mem['samples']}",
+            MUTED, 8,
         )
 
+        # ── done overlay ──
         if time.time() < self.message_until:
-            self.rect(57, 246, 226, 20, "#3b2440")
-            self.text(170, 256, "Done! Codex finished.", GREEN, 10, anchor="center")
+            label_color = GREEN if "Codex" in self.done_label else CLAUDE_TITLE
+            self.rect(27, 278, 306, 20, "#3b2440")
+            self.text(180, 288, self.done_label or "Done!", label_color, 10, anchor="center")
+
+    def _draw_compact(self):
+        self.canvas.delete("all")
+        self.rect(0, 0, COMPACT_W, COMPACT_H, BG)
+        self.rect(8, 8, COMPACT_W - 16, COMPACT_H - 16, PANEL)
+        self.rect(12, 12, COMPACT_W - 24, COMPACT_H - 24, "#17151f")
+        self.draw_gear()
+        self.draw_close()
+        self.draw_pet()
+
+        codex_ok = self.codex_data.get("ok", False)
+        claude_ok = self.claude_data.get("ok", False)
+        c_today = human(self.codex_data["today"]["total"]) if codex_ok else "-"
+        cl_today = human(self.claude_data["today"]["total"]) if claude_ok else "-"
+        self.text(24, 68, f"cx {c_today} | cl {cl_today} today", MUTED, 8)
+
+        if time.time() < self.message_until:
+            label_color = GREEN if "Codex" in self.done_label else CLAUDE_TITLE
+            self.rect(27, 66, 306, 16, "#3b2440")
+            self.text(180, 74, self.done_label or "Done!", label_color, 8, anchor="center")
 
     def animate(self):
         self.frame += 1
         self.draw()
         self.root.after(280, self.animate)
 
+    # ── popups ──────────────────────────────────────────────────────────────
+
     def finish_popup(self):
+        """Codex-style completion popup: pink/green, falling square particles."""
+        self.done_label = self.t("done_codex")
         self.message_until = time.time() + 4
+
+        objective = (self.goal_state.get("latest_objective") or "").strip()
+        if len(objective) > 44:
+            objective = objective[:41] + "..."
+        popup_h = 120 if objective else 100
+
         popup = tk.Toplevel(self.root)
         popup.overrideredirect(True)
         popup.attributes("-topmost", True)
         popup.configure(bg="#1a1022")
-        x = self.root.winfo_x() + 25
-        y = self.root.winfo_y() + 295
-        popup.geometry(f"292x98+{x}+{y}")
-        canvas = tk.Canvas(popup, width=292, height=98, bg="#1a1022", highlightthickness=0)
+        wx, wy = self.root.winfo_x(), self.root.winfo_y()
+        wh = self.root.winfo_height()
+        popup.geometry(f"320x{popup_h}+{wx + 20}+{wy + wh + 4}")
+
+        canvas = tk.Canvas(popup, width=320, height=popup_h, bg="#1a1022", highlightthickness=0)
         canvas.pack()
+        canvas.bind("<Button-1>", lambda _e: popup.destroy())
 
         particles = []
-        for i in range(28):
-            particles.append([146, 48, (i % 7 - 3) * 2.2, -4 - (i % 5), [GREEN, PINK, YELLOW, BLUE][i % 4]])
+        for i in range(32):
+            particles.append([160, 48, (i % 8 - 3.5) * 2.2, -4 - (i % 5), [GREEN, PINK, YELLOW, BLUE][i % 4]])
 
         def tick(step=0):
             canvas.delete("all")
-            canvas.create_rectangle(3, 3, 289, 95, outline=PINK, width=3)
+            canvas.create_rectangle(3, 3, 317, popup_h - 3, outline=PINK, width=3)
             canvas.create_text(
-                146,
-                22,
+                160, 24,
                 text=self.theme.speech_text("done_title", "DONE!"),
-                fill=YELLOW,
-                font=("Consolas", 15, "bold"),
+                fill=YELLOW, font=("Consolas", 15, "bold"),
             )
             canvas.create_text(
-                146,
-                49,
+                160, 52,
                 text=self.theme.speech_text("done_body", "Codex finished the task."),
-                fill=INK,
-                font=("Consolas", 10, "bold"),
+                fill=INK, font=("Consolas", 10, "bold"),
             )
+            if objective:
+                canvas.create_text(160, 80, text=f'"{objective}"', fill=MUTED, font=("Consolas", 8))
             for p in particles:
                 p[0] += p[2]
                 p[1] += p[3]
                 p[3] += 0.45
                 canvas.create_rectangle(p[0], p[1], p[0] + 5, p[1] + 5, fill=p[4], outline=p[4])
             if step < 45:
+                popup.after(45, lambda: tick(step + 1))
+            else:
+                popup.destroy()
+
+        tick()
+
+    def claude_popup(self):
+        """Claude-style completion popup: indigo/purple, rising circular particles."""
+        self.done_label = self.t("done_claude")
+        self.message_until = time.time() + 4
+
+        popup_h = 108
+
+        popup = tk.Toplevel(self.root)
+        popup.overrideredirect(True)
+        popup.attributes("-topmost", True)
+        popup.configure(bg=CLAUDE_BG)
+        wx, wy = self.root.winfo_x(), self.root.winfo_y()
+        wh = self.root.winfo_height()
+        popup.geometry(f"320x{popup_h}+{wx + 20}+{wy + wh + 4}")
+
+        canvas = tk.Canvas(popup, width=320, height=popup_h, bg=CLAUDE_BG, highlightthickness=0)
+        canvas.pack()
+        canvas.bind("<Button-1>", lambda _e: popup.destroy())
+
+        # Particles rise from bottom with deceleration
+        particles = []
+        for i in range(28):
+            particles.append([
+                30 + (i * 9) % 260,
+                popup_h - 8,
+                (i % 7 - 3) * 1.4,
+                -3.0 - (i % 5) * 0.6,
+                CLAUDE_PARTICLES[i % len(CLAUDE_PARTICLES)],
+            ])
+
+        def tick(step=0):
+            canvas.delete("all")
+            # Dark inner fill + border
+            canvas.create_rectangle(2, 2, 318, popup_h - 2, fill=CLAUDE_INNER, outline=CLAUDE_BORDER, width=2)
+            # Subtle top accent line
+            canvas.create_line(12, 4, 308, 4, fill=CLAUDE_BORDER, width=1)
+            # Title with ✦ symbol
+            canvas.create_text(
+                160, 26,
+                text="✦  CLAUDE DONE",
+                fill=CLAUDE_TITLE, font=("Consolas", 14, "bold"),
+            )
+            canvas.create_text(
+                160, 54,
+                text="Claude Code finished the session.",
+                fill=CLAUDE_BODY, font=("Consolas", 9),
+            )
+            canvas.create_text(
+                160, 76,
+                text="click to dismiss",
+                fill=CLAUDE_MUTED, font=("Consolas", 7),
+            )
+            # Rising circular particles
+            for p in particles:
+                p[0] += p[2]
+                p[1] += p[3]
+                p[3] *= 0.94  # decelerate upward
+                p[2] *= 0.98  # decelerate lateral
+                if 0 <= p[0] <= 320 and -6 <= p[1] <= popup_h + 6:
+                    r = 3
+                    canvas.create_oval(p[0] - r, p[1] - r, p[0] + r, p[1] + r, fill=p[4], outline="")
+            if step < 50:
                 popup.after(45, lambda: tick(step + 1))
             else:
                 popup.destroy()

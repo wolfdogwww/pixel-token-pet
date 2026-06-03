@@ -1,203 +1,82 @@
 # Pixel Token Pet
 
-A small pixel-style desktop pet for Windows that shows local Codex and Claude usage.
+A Windows desktop widget that monitors **Codex** and **Claude Code** token usage in real time. Floats on screen as a pixel-art pet; shows today's and all-time token counts, cached tokens, cost, API calls, and its own memory footprint.
 
-## Features
+---
 
-- Floating pixel pet window.
-- Codex token usage from `%USERPROFILE%\.codex\logs_2.sqlite`.
-- Codex goal-complete detection from `%USERPROFILE%\.codex\goals_1.sqlite`.
-- Claude Code usage from `ccusage daily --json` or `%USERPROFILE%\.claude\projects\**\*.jsonl`.
-- Claude Code fallback search in `%APPDATA%\Claude` and Windows packaged Claude folders.
-- Cute completion popup when a Codex goal becomes `complete`.
-- Manual completion popup by double-clicking the pet.
-- External completion popup by touching `finish.signal`.
-- Theme plugin system for replacing the pixel art and popup text.
-- Ten bundled animal themes: fox, dog, cat, whale, rabbit, panda, penguin, frog, hamster, and owl.
-- Gear button in the top-right corner for changing settings without editing JSON.
-- Daily memory usage logging for the pet process.
+## Quick Start
 
-## Run
-
-Double-click:
-
-```text
-run_pet_silent.vbs
-```
-
-Use this when you want a normal no-console startup.
-
-For debugging, run:
+Double-click `run_pet_silent.vbs` (no console window), or:
 
 ```powershell
 python pixel_token_pet.py
 ```
 
-or double-click:
+Settings are stored in `config.json` (created on first run from defaults).
 
-```text
-run_pet.bat
-```
+---
 
-## Controls
+## Features
 
-- Drag: left mouse button.
-- Settings: click the gear in the top-right corner.
-- Menu: right click.
-- Completion popup: double click.
-- Close: right-click menu, then `Close pet`.
+- **Live token counters** — Codex (SQLite) and Claude Code (ccusage or JSONL)
+- **Two completion popups** — Codex style (pink/green, falling particles) and Claude style (indigo/purple, rising particles)
+- **Compact mode** — right-click → *精簡模式 / Compact view* (360 × 92 px)
+- **Minimize to system tray** — right-click → *縮到系統匣 / Minimize to tray*; single-click or double-click the tray icon to restore
+- **Snap to tray corner** — positions window flush with the bottom-right of the work area
+- **Language toggle** — English ↔ 中文 (gear → Settings → Language)
+- **Engineer mode** — click the gear icon 5× rapidly to unlock test buttons and debug menu items
+- **10 built-in themes** — cat, dog, fox, owl, panda, penguin, frog, hamster, rabbit, whale, blob
 
-## Settings
+---
 
-Click the gear in the top-right corner to change common settings:
+## Memory Usage (measured on Windows 11)
 
-- Active theme.
-- Always-on-top window behavior.
-- Memory logging on/off.
-- Refresh interval.
-- Memory sample interval.
+Sampled every 5 minutes via `psapi.dll · GetProcessMemoryInfo`.
 
-Settings are saved to `config.json`, which stays local and is ignored by git.
+| Metric | Value |
+|---|---|
+| **Steady-state RSS** | ~45.5 – 50.5 MB |
+| **Average RSS (2026-06-03 so far)** | ~48.7 MB |
+| **Peak RSS** | ~50.5 MB |
+| **Private bytes (committed)** | ~28 MB |
+| **Startup RSS** | ~25 MB |
+| **Sample interval** | 300 s (configurable, min 30 s) |
 
-## Completion Popup Rules
+> Data from 272 samples over 2026-06-02 (full day) and 150 samples on 2026-06-03 through 12:28.
+> Memory is logged to `logs/memory-YYYY-MM-DD.jsonl` for offline analysis.
 
-The popup does not fire when each shell command or tool call finishes.
+The footprint is dominated by Python 3.11 + Tkinter startup cost (~25 MB at launch) and grows slightly (~50 MB) after the SQLite and JSONL parsers warm up their internal caches.
 
-By default it fires only when:
+---
 
-- A Codex goal changes to `complete`.
-- A Codex response finishes and no command starts during the short completion delay.
-- `finish.signal` is updated.
-- The user manually triggers it from the pet.
+## Configuration (`config.json`)
 
-Relevant config:
+| Key | Default | Description |
+|---|---|---|
+| `refresh_seconds` | `5` | Poll interval for token data |
+| `always_on_top` | `true` | Window stays above all others |
+| `language` | `"en"` | UI language (`"en"` or `"zh"`) |
+| `snap_to_tray` | `false` | Start in bottom-right corner |
+| `theme` | `"default_blob"` | Active pet theme ID |
+| `trigger_finish_popup_on_goal_complete` | `true` | Codex popup on goal completion |
+| `trigger_finish_popup_on_final_response` | `true` | Codex popup after last response |
+| `finish_popup_delay_seconds` | `3` | Grace period before popup fires |
+| `trigger_claude_popup_on_new_completion` | `false` | Claude popup when session goes idle |
+| `claude_idle_seconds` | `30` | Idle window to detect Claude session end |
+| `memory_log_enabled` | `true` | Write RSS samples to `logs/` |
+| `memory_sample_seconds` | `300` | RSS sample interval (min 30) |
 
-```json
-{
-  "trigger_finish_popup_on_new_codex_completion": false,
-  "trigger_finish_popup_on_goal_complete": true,
-  "trigger_finish_popup_on_final_response": true,
-  "finish_popup_delay_seconds": 3,
-  "finish_signal_file": "finish.signal"
-}
-```
+---
 
-## Memory Usage Logging
+## Adding a Theme
 
-The pet records its own memory usage so you can leave it running for a day and see how much RAM it uses. The current-day memory usage is also shown directly in the pet window.
+1. Create `plugins/my_theme/pet_theme.json` (copy an existing theme as template)
+2. Define pixel art in `animations.idle.frames` (rows of symbol strings; `1`=outline `2`=body `3`=eye `4`=cheek)
+3. Set colors in `palette` and display text in `speech`
+4. Select it in Settings → Theme, or set `"theme": "my_theme"` in `config.json`
 
-Default behavior:
+---
 
-- Logs one sample every 5 minutes.
-- Writes JSON Lines files into `logs/`.
-- Uses one file per day: `logs/memory-YYYY-MM-DD.jsonl`.
-- `logs/` is ignored by git.
-- The UI shows current / average / max memory for the current day.
+## Dependencies
 
-Each record contains:
-
-```json
-{
-  "timestamp": "2026-06-02T12:00:00",
-  "rss_bytes": 12345678,
-  "private_bytes": 12345678,
-  "peak_rss_bytes": 12345678
-}
-```
-
-To inspect one day:
-
-```powershell
-Get-Content .\logs\memory-2026-06-02.jsonl
-```
-
-Relevant config:
-
-```json
-{
-  "memory_log_enabled": true,
-  "memory_sample_seconds": 300,
-  "memory_log_dir": "logs"
-}
-```
-
-## Theme Plugins
-
-Pet art and popup text are loaded from:
-
-```text
-plugins/<theme_id>/pet_theme.json
-```
-
-Bundled themes:
-
-- `default_blob`
-- `fox`
-- `dog`
-- `cat`
-- `whale`
-- `rabbit`
-- `panda`
-- `penguin`
-- `frog`
-- `hamster`
-- `owl`
-
-Set the active theme from the gear settings panel or in `config.json`:
-
-```json
-{
-  "theme": "fox"
-}
-```
-
-See `plugins/README.md` for the plugin schema.
-
-## Sharing With Other People
-
-This app is portable:
-
-- Clone or download the repository.
-- Install Python 3 on Windows.
-- Run `run_pet_silent.vbs` for normal use or `python pixel_token_pet.py` for debugging.
-- Optional local data paths are read from `config.json`.
-
-If Codex or Claude data is not present on a machine, the app still opens and shows zero/unavailable usage instead of crashing.
-
-## Config
-
-The app creates `config.json` on first run. This file is local-only and ignored by git.
-
-Use `config.example.json` as the portable template:
-
-```json
-{
-  "codex_logs_db": "%USERPROFILE%\\.codex\\logs_2.sqlite",
-  "codex_goals_db": "%USERPROFILE%\\.codex\\goals_1.sqlite",
-  "claude_dir": "%USERPROFILE%\\.claude",
-  "claude_exe": "%USERPROFILE%\\.local\\bin\\claude.exe",
-  "claude_extra_dirs": [],
-  "refresh_seconds": 5,
-  "always_on_top": true,
-  "trigger_finish_popup_on_new_codex_completion": false,
-  "trigger_finish_popup_on_goal_complete": true,
-  "trigger_finish_popup_on_final_response": true,
-  "finish_popup_delay_seconds": 3,
-  "finish_signal_file": "finish.signal",
-  "theme": "default_blob",
-  "memory_log_enabled": true,
-  "memory_sample_seconds": 300,
-  "memory_log_dir": "logs"
-}
-```
-
-## Privacy Notes
-
-This project should not commit local config, token databases, usage logs, or generated memory logs.
-
-Ignored local files include:
-
-- `config.json`
-- `finish.signal`
-- `logs/`
-- `__pycache__/`
+No external packages. Requires **Python 3.6+** and **Windows** (uses `psapi.dll`, `shell32.dll`).
