@@ -1,14 +1,27 @@
 import json
+import os
 import re
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 import tkinter as tk
 import ctypes
 from ctypes import wintypes
 from datetime import datetime
 from pathlib import Path
+
+_IS_WIN = sys.platform == "win32"
+_IS_MAC = sys.platform == "darwin"
+
+try:
+    import pystray as _pystray
+    from PIL import Image as _PILImage, ImageDraw as _PILImageDraw
+    _HAS_PYSTRAY = True
+except ImportError:
+    _pystray = None
+    _HAS_PYSTRAY = False
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -144,17 +157,50 @@ _LANG = {
 }
 
 
-def get_work_area():
-    """Return Windows work area (screen minus taskbar) as a RECT-like object."""
-    class _RECT(ctypes.Structure):
-        _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
-                    ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
-    rect = _RECT()
-    try:
-        ctypes.windll.user32.SystemParametersInfoW(0x30, 0, ctypes.byref(rect), 0)
-    except Exception:
-        rect.right, rect.bottom = 1920, 1040
-    return rect
+def get_work_area(root=None):
+    """Return usable screen area (minus taskbar/Dock) with .left .top .right .bottom."""
+    class _R:
+        left = 0
+        top = 0
+        right = 1920
+        bottom = 1040
+
+    if _IS_WIN:
+        class _RECT(ctypes.Structure):
+            _fields_ = [
+                ("left", ctypes.c_long), ("top", ctypes.c_long),
+                ("right", ctypes.c_long), ("bottom", ctypes.c_long),
+            ]
+        rect = _RECT()
+        try:
+            ctypes.windll.user32.SystemParametersInfoW(0x30, 0, ctypes.byref(rect), 0)
+            return rect
+        except Exception:
+            pass
+
+    sw = root.winfo_screenwidth()  if root else 1920
+    sh = root.winfo_screenheight() if root else 1080
+    if _IS_MAC:
+        try:
+            from AppKit import NSScreen  # type: ignore
+            vf = NSScreen.mainScreen().visibleFrame()
+            r = _R()
+            r.left   = int(vf.origin.x)
+            r.top    = int(sh - vf.origin.y - vf.size.height)
+            r.right  = int(vf.origin.x + vf.size.width)
+            r.bottom = int(sh - vf.origin.y)
+            return r
+        except Exception:
+            r = _R()
+            r.right = sw
+            r.bottom = sh - 70
+            r.top = 25
+            return r
+    # Linux / other
+    r = _R()
+    r.right = sw
+    r.bottom = sh - 48
+    return r
 
 
 def load_config():
@@ -854,7 +900,7 @@ class MemoryMonitor:
             "private_bytes": 0,
             "peak_rss_bytes": 0,
         }
-        if sys.platform.startswith("win"):
+        if _IS_WIN:
             counters = PROCESS_MEMORY_COUNTERS_EX()
             counters.cb = ctypes.sizeof(PROCESS_MEMORY_COUNTERS_EX)
             psapi = ctypes.WinDLL("psapi.dll")
@@ -872,6 +918,27 @@ class MemoryMonitor:
                 data["rss_bytes"] = int(counters.WorkingSetSize)
                 data["private_bytes"] = int(counters.PrivateUsage)
                 data["peak_rss_bytes"] = int(counters.PeakWorkingSetSize)
+        else:
+            # macOS / Linux: read RSS via `ps` (always available)
+            try:
+                proc = subprocess.run(
+                    ["ps", "-o", "rss=", "-p", str(os.getpid())],
+                    capture_output=True, text=True, timeout=2,
+                )
+                rss_kb = int(proc.stdout.strip())
+                # macOS ps reports RSS in KB; Linux too
+                data["rss_bytes"] = rss_kb * 1024
+                data["private_bytes"] = rss_kb * 1024
+            except Exception:
+                pass
+            try:
+                import resource as _res
+                ru = _res.getrusage(_res.RUSAGE_SELF)
+                # macOS: ru_maxrss in bytes; Linux: kilobytes
+                peak = ru.ru_maxrss if _IS_MAC else ru.ru_maxrss * 1024
+                data["peak_rss_bytes"] = int(peak)
+            except Exception:
+                pass
         self.last_sample = data
         return data
 
@@ -924,107 +991,163 @@ class MemoryMonitor:
         }
 
 
-class _TrayIcon:
-    """Minimal Windows system-tray icon using Shell_NotifyIcon + WndProc subclass."""
+def _make_tray_image():
+    """Generate a small pixel-pet icon for the system tray (requires Pillow)."""
+    if not _HAS_PYSTRAY:
+        return None
+    img = _PILImage.new("RGBA", (64, 64), (0, 0, 0, 0))
+    draw = _PILImageDraw.Draw(img)
+    draw.ellipse([4, 4, 60, 60],  fill="#c9a8ff", outline="#5a3d7a", width=3)
+    draw.ellipse([18, 20, 28, 30], fill="#231b2e")   # left eye
+    draw.ellipse([36, 20, 46, 30], fill="#231b2e")   # right eye
+    draw.ellipse([22, 36, 28, 42], fill="#ff8bd4")   # left cheek
+    draw.ellipse([36, 36, 42, 42], fill="#ff8bd4")   # right cheek
+    return img
 
-    _WM_TRAYICON = 0x0401      # WM_USER + 1 — our private callback message
-    _NIM_ADD = 0
-    _NIM_DELETE = 2
-    _NIF_MESSAGE = 0x1
-    _NIF_ICON = 0x2
-    _NIF_TIP = 0x4
-    _IDI_APPLICATION = 32512
-    _GWLP_WNDPROC = -4
-    _WM_LBUTTONUP = 0x0202
-    _WM_LBUTTONDBLCLK = 0x0203
 
-    class _NID(ctypes.Structure):
-        _fields_ = [
-            ("cbSize",          wintypes.DWORD),
-            ("hWnd",            wintypes.HWND),
-            ("uID",             wintypes.UINT),
-            ("uFlags",          wintypes.UINT),
-            ("uCallbackMessage",wintypes.UINT),
-            ("hIcon",           wintypes.HICON),
-            ("szTip",           ctypes.c_wchar * 128),
-        ]
+if _IS_WIN:
+    class _TrayIcon:
+        """Windows system-tray icon via Shell_NotifyIcon + WndProc subclass."""
 
-    def __init__(self, hwnd, on_restore):
-        self._hwnd = hwnd
-        self._on_restore = on_restore
-        self._proc_ref = None   # must stay alive while registered
-        self._old_proc = None
-        self._active = False
+        _WM_TRAYICON = 0x0401
+        _NIM_ADD = 0
+        _NIM_DELETE = 2
+        _NIF_MESSAGE = 0x1
+        _NIF_ICON = 0x2
+        _NIF_TIP = 0x4
+        _IDI_APPLICATION = 32512
+        _GWLP_WNDPROC = -4
+        _WM_LBUTTONUP = 0x0202
+        _WM_LBUTTONDBLCLK = 0x0203
 
-    def show(self):
-        if self._active:
-            return
-        u32 = ctypes.windll.user32
-        hicon = u32.LoadIconW(None, self._IDI_APPLICATION)
-        nid = self._NID()
-        nid.cbSize = ctypes.sizeof(self._NID)
-        nid.hWnd = self._hwnd
-        nid.uID = 1
-        nid.uFlags = self._NIF_MESSAGE | self._NIF_ICON | self._NIF_TIP
-        nid.uCallbackMessage = self._WM_TRAYICON
-        nid.hIcon = hicon
-        nid.szTip = "Pixel Token Pet"
-        ctypes.windll.shell32.Shell_NotifyIconW(self._NIM_ADD, ctypes.byref(nid))
+        class _NID(ctypes.Structure):
+            _fields_ = [
+                ("cbSize",           wintypes.DWORD),
+                ("hWnd",             wintypes.HWND),
+                ("uID",              wintypes.UINT),
+                ("uFlags",           wintypes.UINT),
+                ("uCallbackMessage", wintypes.UINT),
+                ("hIcon",            wintypes.HICON),
+                ("szTip",            ctypes.c_wchar * 128),
+            ]
 
-        # Subclass the window's WndProc to intercept tray callback messages.
-        try:
-            get_ptr = u32.GetWindowLongPtrW
-            set_ptr = u32.SetWindowLongPtrW
-        except AttributeError:
-            get_ptr = u32.GetWindowLongW
-            set_ptr = u32.SetWindowLongW
-        get_ptr.restype = ctypes.c_ssize_t
-        set_ptr.restype = ctypes.c_ssize_t
+        def __init__(self, hwnd, on_restore):
+            self._hwnd = hwnd
+            self._on_restore = on_restore
+            self._proc_ref = None
+            self._old_proc = None
+            self._active = False
 
-        old = get_ptr(self._hwnd, self._GWLP_WNDPROC)
-        self._old_proc = old
-
-        WM = self._WM_TRAYICON
-        LBU = self._WM_LBUTTONUP
-        LBD = self._WM_LBUTTONDBLCLK
-        restore = self._on_restore
-
-        PFUNC = ctypes.WINFUNCTYPE(
-            ctypes.c_ssize_t,
-            wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
-        )
-
-        @PFUNC
-        def _proc(hwnd, msg, wp, lp):
-            if msg == WM and lp in (LBU, LBD):
-                restore()
-                return 0
-            return u32.CallWindowProcW(old, hwnd, msg, wp, lp)
-
-        self._proc_ref = _proc
-        set_ptr(self._hwnd, self._GWLP_WNDPROC, _proc)
-        self._active = True
-
-    def hide(self):
-        if not self._active:
-            return
-        nid = self._NID()
-        nid.cbSize = ctypes.sizeof(self._NID)
-        nid.hWnd = self._hwnd
-        nid.uID = 1
-        ctypes.windll.shell32.Shell_NotifyIconW(self._NIM_DELETE, ctypes.byref(nid))
-        try:
+        def show(self):
+            if self._active:
+                return
             u32 = ctypes.windll.user32
+            hicon = u32.LoadIconW(None, self._IDI_APPLICATION)
+            nid = self._NID()
+            nid.cbSize = ctypes.sizeof(self._NID)
+            nid.hWnd = self._hwnd
+            nid.uID = 1
+            nid.uFlags = self._NIF_MESSAGE | self._NIF_ICON | self._NIF_TIP
+            nid.uCallbackMessage = self._WM_TRAYICON
+            nid.hIcon = hicon
+            nid.szTip = "Pixel Token Pet"
+            ctypes.windll.shell32.Shell_NotifyIconW(self._NIM_ADD, ctypes.byref(nid))
+
             try:
+                get_ptr = u32.GetWindowLongPtrW
                 set_ptr = u32.SetWindowLongPtrW
             except AttributeError:
+                get_ptr = u32.GetWindowLongW
                 set_ptr = u32.SetWindowLongW
+            get_ptr.restype = ctypes.c_ssize_t
             set_ptr.restype = ctypes.c_ssize_t
-            set_ptr(self._hwnd, self._GWLP_WNDPROC, self._old_proc)
-        except Exception:
-            pass
-        self._proc_ref = None
-        self._active = False
+            old = get_ptr(self._hwnd, self._GWLP_WNDPROC)
+            self._old_proc = old
+
+            WM = self._WM_TRAYICON
+            LBU = self._WM_LBUTTONUP
+            LBD = self._WM_LBUTTONDBLCLK
+            restore = self._on_restore
+
+            PFUNC = ctypes.WINFUNCTYPE(
+                ctypes.c_ssize_t,
+                wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+            )
+
+            @PFUNC
+            def _proc(hwnd, msg, wp, lp):
+                if msg == WM and lp in (LBU, LBD):
+                    restore()
+                    return 0
+                return u32.CallWindowProcW(old, hwnd, msg, wp, lp)
+
+            self._proc_ref = _proc
+            set_ptr(self._hwnd, self._GWLP_WNDPROC, _proc)
+            self._active = True
+
+        def hide(self):
+            if not self._active:
+                return
+            nid = self._NID()
+            nid.cbSize = ctypes.sizeof(self._NID)
+            nid.hWnd = self._hwnd
+            nid.uID = 1
+            ctypes.windll.shell32.Shell_NotifyIconW(self._NIM_DELETE, ctypes.byref(nid))
+            try:
+                u32 = ctypes.windll.user32
+                try:
+                    set_ptr = u32.SetWindowLongPtrW
+                except AttributeError:
+                    set_ptr = u32.SetWindowLongW
+                set_ptr.restype = ctypes.c_ssize_t
+                set_ptr(self._hwnd, self._GWLP_WNDPROC, self._old_proc)
+            except Exception:
+                pass
+            self._proc_ref = None
+            self._active = False
+
+else:
+    class _TrayIcon:
+        """Cross-platform tray icon via pystray (macOS / Linux)."""
+
+        def __init__(self, hwnd, on_restore):
+            self._on_restore = on_restore
+            self._icon = None
+            self._active = False
+
+        def show(self):
+            if self._active or not _HAS_PYSTRAY:
+                return
+            img = _make_tray_image()
+            if img is None:
+                return
+            restore = self._on_restore
+
+            def _on_activate(icon, item=None):
+                icon.stop()
+                restore()
+
+            menu = _pystray.Menu(
+                _pystray.MenuItem("Restore", _on_activate, default=True),
+            )
+            self._icon = _pystray.Icon("PixelTokenPet", img, "Pixel Token Pet", menu)
+            # run_detached() is non-blocking and supported on macOS since pystray 0.17
+            try:
+                self._icon.run_detached()
+            except AttributeError:
+                threading.Thread(target=self._icon.run, daemon=True).start()
+            self._active = True
+
+        def hide(self):
+            if not self._active:
+                return
+            if self._icon:
+                try:
+                    self._icon.stop()
+                except Exception:
+                    pass
+                self._icon = None
+            self._active = False
 
 
 class PixelPet:
@@ -1056,7 +1179,8 @@ class PixelPet:
 
         root.title("Pixel Token Pet")
         if self.config.get("snap_to_tray", False):
-            rect = get_work_area()
+            root.update_idletasks()
+            rect = get_work_area(root)
             sx = rect.right - NORMAL_W - 4
             sy = rect.bottom - NORMAL_H - 4
             root.geometry(f"{NORMAL_W}x{NORMAL_H}+{sx}+{sy}")
@@ -1157,19 +1281,25 @@ class PixelPet:
         self.draw()
 
     def snap_to_tray(self):
-        rect = get_work_area()
+        rect = get_work_area(self.root)
         h = COMPACT_H if self.compact else NORMAL_H
         x = rect.right - NORMAL_W - 4
         y = rect.bottom - h - 4
         self.root.geometry(f"{NORMAL_W}x{h}+{x}+{y}")
 
     def minimize_to_tray(self):
-        self.root.update_idletasks()
-        hwnd = ctypes.windll.user32.FindWindowW(None, "Pixel Token Pet")
-        if hwnd and self._tray is None:
+        if not _IS_WIN and not _HAS_PYSTRAY:
+            # No tray support available — just minimize to Dock/taskbar
+            self.root.iconify()
+            return
+        if self._tray is None:
+            if _IS_WIN:
+                self.root.update_idletasks()
+                hwnd = ctypes.windll.user32.FindWindowW(None, "Pixel Token Pet")
+            else:
+                hwnd = 0  # not used by pystray backend
             self._tray = _TrayIcon(hwnd, self._restore_from_tray)
-        if self._tray:
-            self._tray.show()
+        self._tray.show()
         self.root.withdraw()
 
     def _restore_from_tray(self):
@@ -1213,8 +1343,7 @@ class PixelPet:
         win.resizable(False, False)
         wx = self.root.winfo_x() + self.root.winfo_width() + 8
         wy = self.root.winfo_y()
-        win_h = 490 if self.engineer_mode else 470
-        win.geometry(f"380x{win_h}+{wx}+{wy}")
+        win.geometry(f"380x100+{wx}+{wy}")  # placeholder; resized after widgets pack
 
         theme_options = available_themes()
         theme_ids = [item["id"] for item in theme_options] or [DEFAULT_THEME]
@@ -1319,6 +1448,10 @@ class PixelPet:
             self._rebuild_menu()
             self.draw()
             win.destroy()
+
+        # Resize window to fit content after all widgets are packed
+        win.update_idletasks()
+        win.geometry(f"380x{win.winfo_reqheight()}+{wx}+{wy}")
 
     def settings_label(self, parent, text_value):
         tk.Label(parent, text=text_value, bg=BG, fg=YELLOW, font=("Consolas", 9, "bold"), anchor="w").pack(fill="x")

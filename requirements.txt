@@ -1,0 +1,11 @@
+# Optional — only needed on macOS / Linux for system-tray support.
+# Windows uses its own built-in ctypes implementation (no pip install needed).
+#
+# Install with:
+#   pip install -r requirements.txt
+#
+# Or install individually:
+#   pip install pystray pillow
+
+pystray>=0.19.0
+Pillow>=9.0.0
