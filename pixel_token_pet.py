@@ -24,7 +24,15 @@ except ImportError:
     _HAS_PYSTRAY = False
 
 
-APP_DIR = Path(__file__).resolve().parent
+# When frozen by PyInstaller, user data goes next to the executable;
+# bundled read-only resources (plugins) are in sys._MEIPASS.
+if getattr(sys, "frozen", False):
+    APP_DIR = Path(sys.executable).resolve().parent
+    _RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", str(APP_DIR)))
+else:
+    APP_DIR = Path(__file__).resolve().parent
+    _RESOURCE_DIR = APP_DIR
+
 CONFIG_PATH = APP_DIR / "config.json"
 DEFAULT_CODEX_DB = Path.home() / ".codex" / "logs_2.sqlite"
 DEFAULT_CODEX_GOALS_DB = Path.home() / ".codex" / "goals_1.sqlite"
@@ -266,7 +274,7 @@ def os_path_expand(value):
 
 def available_themes():
     themes = []
-    plugins_dir = APP_DIR / "plugins"
+    plugins_dir = _RESOURCE_DIR / "plugins"
     if plugins_dir.exists():
         for path in sorted(plugins_dir.iterdir()):
             manifest = path / "pet_theme.json"
@@ -318,9 +326,9 @@ class PetTheme:
     @classmethod
     def load(cls, config):
         theme_id = config.get("theme", DEFAULT_THEME)
-        path = APP_DIR / "plugins" / theme_id / "pet_theme.json"
+        path = _RESOURCE_DIR / "plugins" / theme_id / "pet_theme.json"
         if not path.exists():
-            path = APP_DIR / "plugins" / DEFAULT_THEME / "pet_theme.json"
+            path = _RESOURCE_DIR / "plugins" / DEFAULT_THEME / "pet_theme.json"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             return cls(path.parent.name, data)

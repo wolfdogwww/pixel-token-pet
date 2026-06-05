@@ -7,4 +7,6 @@ logs/
 .mypy_cache/
 dist/
 build/
+# keep PixelTokenPet.spec tracked
 *.spec
+!PixelTokenPet.spec
